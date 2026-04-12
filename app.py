@@ -156,7 +156,7 @@ if not df_all.empty:
                 st.markdown("**📊 Runs Created (RC) Ranking**")
                 top_10_rc = df_team.sort_values('rc', ascending=False).head(10)
                 fig_rc, ax_rc = plt.subplots(figsize=(8, 5))
-                sns.barplot(data=top_10_rc, x='rc', y='name_clean', palette='magma', ax=ax_rc)
+                sns.barplot(data=top_10_rc, x='rc', y='name_clean', palette='viridis', ax=ax_rc)
                 ax_rc.set_xlabel("Estimated Runs Created (RC)")
                 ax_rc.set_ylabel("")
                 st.pyplot(fig_rc)
@@ -165,7 +165,7 @@ if not df_all.empty:
                 st.markdown("**🎯 Plate Discipline: K% vs BB%**")
                 fig_disc, ax_disc = plt.subplots(figsize=(8, 5))
                 sns.scatterplot(data=df_team, x='k_pct', y='bb_pct', size='rc', hue='gpa_val', sizes=(80, 400), alpha=0.7, ax=ax_disc)
-                
+                ax_disc.legend(bbox_to_anchor=(1.02, 1), loc='upper left',fontsize='small',borderaxespad=0.)
                 # Label all players
                 for _, row in df_team.iterrows():
                     ax_disc.text(row['k_pct'] + 0.003, row['bb_pct'], row['name_clean'], fontsize=8)
@@ -173,8 +173,7 @@ if not df_all.empty:
                 ax_disc.axhline(df_team['bb_pct'].mean(), color='red', linestyle='--', alpha=0.5, label='Team Avg BB%')
                 ax_disc.axvline(df_team['k_pct'].mean(), color='blue', linestyle='--', alpha=0.5, label='Team Avg K%')
                 
-                # Format legend to upper right
-                ax_disc.legend(loc='upper right', fontsize='x-small', title='Metrics')
+                
                 
                 ax_disc.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
                 ax_disc.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
