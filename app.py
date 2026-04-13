@@ -152,7 +152,7 @@ def load_pitching_data():
 # ==========================================
 # 3. Main Logic and Metric Calculations
 # ==========================================
-st.title("⚾ Real-time Baseball Analytics System")
+st.title("⚾ 2025 Baseball Analytics System")
 
 df_all = load_data()
 
@@ -545,8 +545,8 @@ if not df_all.empty:
                         * **ISO (Isolated Power)**: SLG minus AVG. Measures a batter's pure power. Values > .200 indicate a strong power hitter.
                         * **K% (Strikeout Rate)**: SO divided by PA.
                         * **BB% (Walk Rate)**: BB divided by PA. An excellent indicator of plate discipline and batting eye.
-                        * **RC (Runs Created)**: A metric created by Bill James estimating how many runs a player has contributed to their team.
-                        * **GPA (Gross Production Average)**: Similar to OPS, but weights OBP 1.8 times heavier to reflect its true statistical value to scoring runs.
+                        * **RC (Runs Created)**: A metric created by Bill James estimating how many runs a player has contributed to their team.The baseline formula is $$RC = \\frac{(H + BB) \\times TB}{AB + BB}$$which mathematically multiplies the "on-base factor" (Hits plus Walks) by the "advancement factor" (Total Bases), and then divides the result by the "opportunity factor" (At Bats plus Walks). By combining these elements, the formula calculates offensive efficiency; for example, if a player finishes the season with an RC of 80, it means their individual offensive production at the plate was directly responsible for generating approximately 80 runs for their team throughout the year.
+                        * **GPA (Gross Production Average)**: Similar to OPS, The formula is $$ GPA = \\frac{1.8 \\times OBP + SLG}{4}$$which corrects the primary flaw of OPS by multiplying On-Base Percentage (OBP) by a weight of 1.8. This adjustment reflects the historical statistical reality that avoiding an out and getting on base is approximately 1.8 times more valuable to run creation than hitting for power (SLG). 
                         """)
 
                 with col_dict2:
