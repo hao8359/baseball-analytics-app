@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import xgboost as xgb
 
-# ======== 請加上這兩行 ========
+# ======== Please add these two lines ========
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
@@ -74,11 +74,11 @@ def load_data():
         st.error(f"Connection Error: {e}")
         return pd.DataFrame()
 # ==========================================
-# 新增：投手數據載入與計算
+# New: Pitching data loading and calculation
 # ==========================================
 @st.cache_data(ttl=3600)
 def load_pitching_data():
-    # 移除 URL 中的 team 參數，一次抓取所有球隊的投手數據
+    # Remove the team parameter from the URL to fetch pitching data for all teams at once
     url = "https://stats.baseboll-softboll.se/api/v1/stats/events/2025-regionserien-baseboll/index?section=players&stats-section=pitching&team=&round=&split=&split=&language=en"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -90,7 +90,7 @@ def load_pitching_data():
         json_data = response.json()
         df = pd.json_normalize(json_data['data'], sep='_')
         
-        # 定義需要轉為數值的欄位
+        # Define columns that need to be converted to numeric
         numeric_cols = [
             'pitch_win', 'pitch_loss', 'era', 'pitch_appear', 'pitch_gs', 'pitch_save', 
             'pitch_ip', 'pitch_h', 'pitch_r', 'pitch_er', 'pitch_bb', 'pitch_so', 
@@ -101,12 +101,12 @@ def load_pitching_data():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
                 
-        # 清理姓名
+        # Clean names
         def clean_name(text):
             return " ".join(re.sub(r'<[^>]*>', ' ', str(text)).split())
         df['name_clean'] = df['name'].apply(clean_name)
         
-        # 處理投球局數 (IP) 轉換：棒球的 10.1 局代表 10又 1/3 局
+        # Process innings pitched (IP) conversion: In baseball, 10.1 innings represents 10 and 1/3 innings
         def convert_ip(ip):
             ip_str = str(ip)
             if '.' in ip_str:
@@ -116,26 +116,26 @@ def load_pitching_data():
             
         df['ip_calc'] = df['pitch_ip'].apply(convert_ip)
         
-        # 安全除法函數
+        # Safe division function
         def safe_divide(numerator, denominator):
             return np.where(denominator == 0, 0, numerator / denominator)
 
         # ----------------------------------------
-        # 計算進階指標 (Advanced Metrics)
+        # Calculate advanced metrics (Advanced Metrics)
         # ----------------------------------------
         
-        # 1. 總面對打席數 (Total Batters Faced, TBF) 估算
+        # 1. Total Batters Faced (TBF) estimate
         # TBF = AB + BB + HBP + SF + SH
         df['tbf'] = df['pitch_ab'] + df['pitch_bb'] + df['pitch_hbp'] + df['pitch_sfa'] + df['pitch_sha']
         
         # 2. FIP (Fielding Independent Pitching)
-        # 公式: (13*HR + 3*(BB+HBP) - 2*SO) / IP + C (常數 C 通常約為 3.15)
+        # Formula: (13*HR + 3*(BB+HBP) - 2*SO) / IP + C (Constant C is usually about 3.15)
         fip_constant = 3.15
         fip_numerator = (13 * df['pitch_hr']) + (3 * (df['pitch_bb'] + df['pitch_hbp'])) - (2 * df['pitch_so'])
         df['fip'] = safe_divide(fip_numerator, df['ip_calc']) + fip_constant
         
-        # 3. Opponent BABIP (被場內安打率)
-        # 公式: (H - HR) / (AB - SO - HR + SF)
+        # 3. Opponent BABIP (Batting Average on Balls in Play)
+        # Formula: (H - HR) / (AB - SO - HR + SF)
         babip_denom = df['pitch_ab'] - df['pitch_so'] - df['pitch_hr'] + df['pitch_sfa']
         df['opp_babip'] = safe_divide((df['pitch_h'] - df['pitch_hr']), babip_denom)
         
@@ -190,8 +190,17 @@ if not df_all.empty:
         # ==========================================
         # 4. Dual Tab Interface (English)
         # ==========================================
-        # 正確的寫法 (加入第 3 個標題)
-        tab1, tab2, tab3, tab4 = st.tabs(["📋 Basic Stats", "🔬 Advanced Analytics", "🤖 ML Analytics", "live bp simulation"])
+        # Correct way to write (add the 3rd title)
+        # Replace with writing containing 5 tabs
+        # 加入第 6 個標題 "📖 數據字典"
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "📋 Batting Basic stats", 
+            "🔬 Batting Advanced stats", 
+            "🥎 Pitching Stats", 
+            "🤖 Pitching Analytics[ML]", 
+            "⚾ BP Sim", 
+            "📖 Term Dictionary"
+        ])
         
         # --- Tab 1: Basic Stats (Rate Stats moved to front) ---
         with tab1:
@@ -260,83 +269,146 @@ if not df_all.empty:
                 ax_disc.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
                 st.pyplot(fig_disc)
         with tab3:
-            # 1. 取得全聯盟的投手數據 (過濾掉投球局數小於 5 局的樣本)
-            df_pitchers_all = load_pitching_data()
-            df_pitchers_all = df_pitchers_all[df_pitchers_all['ip_calc'] >= 5].copy() 
-
-            if not df_pitchers_all.empty:
-                st.subheader(f"🤖 機器學習分析 (投手端) - {selected_team}")
+            st.subheader(f"🥎 Pitching Dashboard: {selected_team}")
                 
-                # ==========================================
-                # 先用「全聯盟」的數據來訓練模型，確保準確度
-                # ==========================================
-                features = ['k_pct', 'bb_pct', 'opp_babip', 'fip']
-                X = df_pitchers_all[features].fillna(0)
-                scaler = StandardScaler()
-                X_scaled = scaler.fit_transform(X)
-                
-                # 執行 K-Means 分群
-                kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
-                df_pitchers_all['cluster'] = kmeans.fit_predict(X_scaled)
-                cluster_mapping = {0: "Power Pitchers ", 1: "Efficiency/Ground ", 2: "Wild/Struggling s"}
-                df_pitchers_all['style'] = df_pitchers_all['cluster'].map(cluster_mapping)
-                
-                # 計算運氣指數 (ERA 減去 FIP)
-                df_pitchers_all['era_minus_fip'] = df_pitchers_all['era'] - df_pitchers_all['fip']
-                
-                # ==========================================
-                # 這裡最重要：將預測完的結果，過濾出「當前選擇的球隊」
-                # ==========================================
+            df_pitching_all = load_pitching_data()
+            
+            if not df_pitching_all.empty:
                 target_id = TEAM_IDS[selected_team]
-                df_team_pitchers = df_pitchers_all[df_pitchers_all['teamid'].astype(str) == target_id].copy()
-
+                df_team_pitchers = df_pitching_all[df_pitching_all['teamid'].astype(str) == target_id].copy()
+                
                 if df_team_pitchers.empty:
-                    st.warning(f"目前 {selected_team} 沒有符合條件 (投球局數 >= 5) 的投手數據。")
+                    st.warning(f"No pitching stats found for {selected_team}.")
                 else:
-                    st.markdown("### 1. 投手風格分群 (Clustering)")
+                    # Calculate WHIP
+                    df_team_pitchers['whip'] = safe_divide((df_team_pitchers['pitch_bb'] + df_team_pitchers['pitch_h']), df_team_pitchers['ip_calc'])
                     
-                    fig_cluster, ax_cluster = plt.subplots(figsize=(8, 5))
+                    # -------------------------
+                    # 1. Basic Pitching Data
+                    # -------------------------
+                    st.markdown("### 📋 Basic Pitching Stats")
+                    st.info("Includes W/L, ERA, Innings Pitched (IP), Hits, Walks, Strikeouts, and WHIP.")
                     
-                    # 畫出該隊投手的散佈圖
-                    sns.scatterplot(data=df_team_pitchers, x='k_pct', y='bb_pct', hue='style', s=150, ax=ax_cluster)
+                    basic_pitching_cols = [
+                        'name_clean', 'pitch_win', 'pitch_loss', 'era', 'pitch_appear', 'pitch_gs', 
+                        'pitch_save', 'ip_calc', 'pitch_h', 'pitch_r', 'pitch_er', 'pitch_bb', 'pitch_so', 'pitch_hr', 'whip'
+                    ]
+                    avail_basic_pitch = [c for c in basic_pitching_cols if c in df_team_pitchers.columns]
                     
-                    # 在點旁邊加上球員名字標籤，方便辨識
-                    for _, row in df_team_pitchers.iterrows():
-                        ax_cluster.text(row['k_pct'] + 0.005, row['bb_pct'], row['name_clean'], fontsize=10)
-
-                    ax_cluster.set_title(f"Pitcher Styles ({selected_team}): K% vs BB%")
-                    # 格式化 X 軸和 Y 軸為百分比
-                    ax_cluster.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
-                    ax_cluster.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
-                    st.pyplot(fig_cluster)
+                    st.dataframe(
+                        df_team_pitchers[avail_basic_pitch].sort_values('ip_calc', ascending=False).style.format({
+                            'era': '{:.2f}', 'ip_calc': '{:.1f}', 'whip': '{:.2f}'
+                        }),
+                        use_container_width=True,
+                        hide_index=True
+                    )
                     
                     st.divider()
                     
-                    st.markdown("### 2. 防禦率「未爆彈」偵測 (ERA vs FIP)")
-                    st.info("比較投手的實際 ERA 與進階獨立防禦率 (FIP)。若 ERA 遠低於 FIP，代表運氣成分居多，未來有爆掉的風險；反之則代表實力被低估。")
+                    # -------------------------
+                    # 2. Advanced Pitching Data
+                    # -------------------------
+                    st.markdown("### 🔬 Advanced Sabermetrics")
+                    st.info("**FIP**: Fielding Independent Pitching | **Opp BABIP**: Batting Average on Balls In Play | **K-BB%**: Strikeout minus Walk percentage (evaluates command and dominance)")
                     
-                    df_team_pitchers = df_team_pitchers.sort_values('era_minus_fip', ascending=False)
+                    adv_pitching_cols = [
+                        'name_clean', 'tbf', 'fip', 'opp_babip', 'k_pct', 'bb_pct', 'k_minus_bb_pct'
+                    ]
+                    avail_adv_pitch = [c for c in adv_pitching_cols if c in df_team_pitchers.columns]
                     
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.error("🚨 運氣極佳 / 未爆彈區 (ERA 比 FIP 低)")
-                        # 篩選出 ERA 小於 FIP 的投手 (負值)
-                        lucky_pitchers = df_team_pitchers[df_team_pitchers['era_minus_fip'] < 0]
-                        st.dataframe(lucky_pitchers[['name_clean', 'era', 'fip', 'era_minus_fip']].style.format({
-                            'era': '{:.2f}', 'fip': '{:.2f}', 'era_minus_fip': '{:.2f}'
-                        }), hide_index=True)
-                        
-                    with col2:
-                        st.success("💎 運氣極差 / 實力被低估 (ERA 比 FIP 高)")
-                        # 篩選出 ERA 大於 FIP 的投手 (正值)
-                        unlucky_pitchers = df_team_pitchers[df_team_pitchers['era_minus_fip'] >= 0]
-                        st.dataframe(unlucky_pitchers[['name_clean', 'era', 'fip', 'era_minus_fip']].style.format({
-                            'era': '{:.2f}', 'fip': '{:.2f}', 'era_minus_fip': '{:.2f}'
-                        }), hide_index=True)
+                    st.dataframe(
+                        df_team_pitchers[avail_adv_pitch].sort_values('tbf', ascending=False).style.format({
+                            'fip': '{:.2f}', 
+                            'opp_babip': '{:.3f}', 
+                            'k_pct': '{:.1%}', 
+                            'bb_pct': '{:.1%}', 
+                            'k_minus_bb_pct': '{:.1%}'
+                        }),
+                        use_container_width=True,
+                        hide_index=True
+                    )
             with tab4:
-                st.subheader("⚔️ 投手 vs 打者：對戰期望值模擬")
-                st.info("結合打者的長打能力 (ISO) 與投手的進階獨立數據 (FIP, K%)，預測該打席發生特定結果的機率。")
+                # 1. Get league-wide pitching data (filter out samples with innings pitched less than 5)
+                df_pitchers_all = load_pitching_data()
+                df_pitchers_all = df_pitchers_all[df_pitchers_all['ip_calc'] >= 5].copy() 
 
+                if not df_pitchers_all.empty:
+                    st.subheader(f"🤖 Machine Learning Analysis (Pitching Side) - {selected_team}")
+                    
+                    # ==========================================
+                    # First use "league-wide" data to train the model to ensure accuracy
+                    # ==========================================
+                    features = ['k_pct', 'bb_pct', 'opp_babip', 'fip']
+                    X = df_pitchers_all[features].fillna(0)
+                    scaler = StandardScaler()
+                    X_scaled = scaler.fit_transform(X)
+                    
+                    # Execute K-Means clustering
+                    kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+                    df_pitchers_all['cluster'] = kmeans.fit_predict(X_scaled)
+                    cluster_mapping = {0: "Power Pitchers", 1: "Efficiency/Ground Ball", 2: "Wild/Struggling"}
+                    df_pitchers_all['style'] = df_pitchers_all['cluster'].map(cluster_mapping)
+                    
+                    # Calculate luck index (ERA minus FIP)
+                    df_pitchers_all['era_minus_fip'] = df_pitchers_all['era'] - df_pitchers_all['fip']
+                    
+                    # ==========================================
+                    # This is the most important: Filter the predicted results to the "currently selected team"
+                    # ==========================================
+                    target_id = TEAM_IDS[selected_team]
+                    df_team_pitchers = df_pitchers_all[df_pitchers_all['teamid'].astype(str) == target_id].copy()
+
+                    if df_team_pitchers.empty:
+                        st.warning(f"Currently {selected_team} has no pitcher data that meets the conditions (innings pitched >= 5).")
+                    else:
+                        st.markdown("### 1. Pitcher Style Clustering (Clustering)")
+                        
+                        fig_cluster, ax_cluster = plt.subplots(figsize=(8, 5))
+                        
+                        # Draw the scatter plot of the team's pitchers
+                        sns.scatterplot(data=df_team_pitchers, x='k_pct', y='bb_pct', hue='style', s=150, ax=ax_cluster)
+                        
+                        # Add player name labels next to the points for easy identification
+                        for _, row in df_team_pitchers.iterrows():
+                            ax_cluster.text(row['k_pct'] + 0.005, row['bb_pct'], row['name_clean'], fontsize=10)
+
+                        ax_cluster.set_title(f"Pitcher Styles ({selected_team}): K% vs BB%")
+                        # Format X and Y axes as percentages
+                        ax_cluster.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+                        ax_cluster.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+                        st.pyplot(fig_cluster)
+                        
+                        st.divider()
+                        
+                        st.markdown("### 2. ERA Unexploded Bomb Detection (ERA vs FIP)")
+                        st.info("Compare the pitcher's actual ERA with advanced independent ERA (FIP). If ERA is much lower than FIP, it means luck is a big factor, with risk of exploding in the future; otherwise, strength is underestimated.")
+                        
+                        df_team_pitchers = df_team_pitchers.sort_values('era_minus_fip', ascending=False)
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.error("🚨 Extremely lucky / unexploded bomb zone (ERA lower than FIP)")
+                            # Filter pitchers with ERA less than FIP (negative values)
+                            lucky_pitchers = df_team_pitchers[df_team_pitchers['era_minus_fip'] < 0]
+                            st.dataframe(lucky_pitchers[['name_clean', 'era', 'fip', 'era_minus_fip']].style.format({
+                                'era': '{:.2f}', 'fip': '{:.2f}', 'era_minus_fip': '{:.2f}'
+                            }), hide_index=True)
+                            
+                        with col2:
+                            st.success("💎 Extremely unlucky / strength underestimated (ERA higher than FIP)")
+                            # Filter pitchers with ERA greater than FIP (positive values)
+                            unlucky_pitchers = df_team_pitchers[df_team_pitchers['era_minus_fip'] >= 0]
+                            st.dataframe(unlucky_pitchers[['name_clean', 'era', 'fip', 'era_minus_fip']].style.format({
+                                'era': '{:.2f}', 'fip': '{:.2f}', 'era_minus_fip': '{:.2f}'
+                            }), hide_index=True)
+
+
+
+
+               
+            with tab5:
+                st.subheader("⚔️ Pitcher vs Batter: Matchup Expected Value Simulation")
+                st.info("Combine the batter's extra-base hit ability (ISO) with the pitcher's advanced independent data (FIP, K%), predict the probability of specific outcomes in the at-bat.")
                 df_batters_all = load_data()
                 df_pitchers_all = load_pitching_data()
 
@@ -351,60 +423,60 @@ if not df_all.empty:
                     col_sel1, col_sel2 = st.columns(2)
                     
                     with col_sel1:
-                        st.markdown("### 🦇 選擇打者 (Offense)")
-                        b_team = st.selectbox("打者所屬球隊", list(TEAM_IDS.keys()), key="bat_team")
+                        st.markdown("### 🦇 Select Batter (Offense)")
+                        b_team = st.selectbox("Batter's team", list(TEAM_IDS.keys()), key="bat_team")
                         b_players = df_batters_filtered[df_batters_filtered['teamid'].astype(str) == TEAM_IDS[b_team]]
                         
                         if b_players.empty:
-                            st.warning("該隊目前無符合條件的打者。")
+                            st.warning("The team currently has no qualified batters.")
                             selected_batter_name = None
                         else:
-                            selected_batter_name = st.selectbox("選擇打者", b_players['name_clean'].tolist())
+                            selected_batter_name = st.selectbox("Select batter", b_players['name_clean'].tolist())
                             batter_stats = b_players[b_players['name_clean'] == selected_batter_name].iloc[0]
 
                     with col_sel2:
-                        st.markdown("### ⚾ 選擇投手 (Defense)")
-                        p_team = st.selectbox("投手所屬球隊", list(TEAM_IDS.keys()), key="pit_team")
+                        st.markdown("### ⚾ Select Pitcher (Defense)")
+                        p_team = st.selectbox("Pitcher's team", list(TEAM_IDS.keys()), key="pit_team")
                         p_players = df_pitchers_filtered[df_pitchers_filtered['teamid'].astype(str) == TEAM_IDS[p_team]]
                         
                         if p_players.empty:
-                            st.warning("該隊目前無符合條件的投手。")
+                            st.warning("The team currently has no qualified pitchers.")
                             selected_pitcher_name = None
                         else:
-                            selected_pitcher_name = st.selectbox("選擇投手", p_players['name_clean'].tolist())
+                            selected_pitcher_name = st.selectbox("Select pitcher", p_players['name_clean'].tolist())
                             pitcher_stats = p_players[p_players['name_clean'] == selected_pitcher_name].iloc[0]
 
                     st.divider()
 
-                    # 如果打者跟投手都有順利選到，就進行計算
+                    # If both batter and pitcher are successfully selected, proceed with calculation
                 if selected_batter_name and selected_pitcher_name:
-                    # 1. 取得聯盟平均值 (作為基準點)
+                    # 1. Get league averages (as baseline)
                     lg_avg_k_pct = df_batters_filtered['k_pct'].mean()
                     lg_avg_hr_rate = safe_divide(df_batters_filtered['hr'].sum(), df_batters_filtered['ab'].sum())
-                    lg_avg_ba = safe_divide(df_batters_filtered['h'].sum(), df_batters_filtered['ab'].sum()) # 新增：聯盟平均打擊率
+                    lg_avg_ba = safe_divide(df_batters_filtered['h'].sum(), df_batters_filtered['ab'].sum()) # New: League average batting average
                     
-                    # 避免極端值或除以 0 的保護機制
+                    # Avoid extreme values or divide by 0 protection mechanism
                     lg_avg_k_pct = lg_avg_k_pct if lg_avg_k_pct > 0 else 0.20
                     lg_avg_hr_rate = lg_avg_hr_rate if lg_avg_hr_rate > 0 else 0.03
                     lg_avg_ba = lg_avg_ba if lg_avg_ba > 0 else 0.250
                     
-                    # 2. 擷取雙方數據
+                    # 2. Extract both sides' data
                     b_k = batter_stats['k_pct']
                     b_iso = batter_stats['iso_val']
-                    b_avg = batter_stats['avg'] # 新增：打者打擊率
+                    b_avg = batter_stats['avg'] # New: Batter's batting average
                     
                     p_k = pitcher_stats['k_pct']
                     p_fip = pitcher_stats['fip']
-                    p_opp_avg = safe_divide(pitcher_stats['pitch_h'], pitcher_stats['pitch_ab']) # 新增：投手被打擊率
+                    p_opp_avg = safe_divide(pitcher_stats['pitch_h'], pitcher_stats['pitch_ab']) # New: Pitcher's opponent batting average
                     
-                    # --- 3. 預測公式計算 ---
-                    # 三振率預測
+                    # --- 3. Prediction formula calculation ---
+                    # Strikeout rate prediction
                     pred_k = min((b_k * p_k) / lg_avg_k_pct, 0.95) 
                     
-                    # 全壘打預測
+                    # Home run prediction
                     pred_hr = min(max((b_iso * 0.2) * (pitcher_stats['fip'] / 3.15), 0), 0.30)
 
-                    # 新增：安打機率預測 (使用 Bill James 的 Log-5 公式)
+                    # New: Hit probability prediction (using Bill James' Log-5 formula)
                     if lg_avg_ba > 0 and lg_avg_ba < 1:
                         log5_num = (b_avg * p_opp_avg) / lg_avg_ba
                         log5_den = log5_num + ((1 - b_avg) * (1 - p_opp_avg)) / (1 - lg_avg_ba)
@@ -412,34 +484,130 @@ if not df_all.empty:
                     else:
                         pred_hit = 0
 
-                    st.markdown(f"#### 🏟️ 對決模擬結果：**{selected_batter_name}** vs **{selected_pitcher_name}**")
+                    st.markdown(f"#### 🏟️ Matchup simulation results: **{selected_batter_name}** vs **{selected_pitcher_name}**")
                     
-                    # 擴充為 5 個顯示欄位
+                    # Expand to 5 display columns
                     res_col1, res_col2, res_col3, res_col4, res_col5 = st.columns(5)
                     
-                    # 三振預測顯示
+                    # Strikeout prediction display
                     k_diff = pred_k - lg_avg_k_pct
-                    res_col1.metric("預測三振機率 (K%)", f"{pred_k:.1%}", f"{k_diff*100:.1f}% vs 聯盟平均", delta_color="inverse")
+                    res_col1.metric("Predicted strikeout rate (K%)", f"{pred_k:.1%}", f"{k_diff*100:.1f}% vs league average", delta_color="inverse")
                     
-                    # 新增：安打預測顯示
+                    # New: Hit prediction display
                     hit_diff = pred_hit - lg_avg_ba
-                    res_col2.metric("預測安打機率 (xBA)", f"{pred_hit:.1%}", f"{hit_diff*100:.1f}% vs 聯盟平均", delta_color="normal")
+                    res_col2.metric("Predicted hit rate (xBA)", f"{pred_hit:.1%}", f"{hit_diff*100:.1f}% vs league average", delta_color="normal")
                     
-                    # 全壘打預測顯示
+                    # Home run prediction display
                     hr_diff = pred_hr - lg_avg_hr_rate
-                    res_col3.metric("預測全壘打機率 (HR%)", f"{pred_hr:.1%}", f"{hr_diff*100:.1f}% vs 聯盟平均", delta_color="normal")
+                    res_col3.metric("Predicted home run rate (HR%)", f"{pred_hr:.1%}", f"{hr_diff*100:.1f}% vs league average", delta_color="normal")
                     
-                    # 關鍵對決指標
-                    res_col4.metric("打者長打威脅 (ISO)", f"{b_iso:.3f}")
-                    res_col5.metric("投手獨立防禦率 (FIP)", f"{p_fip:.2f}")
+                    # Key matchup indicators
+                    res_col4.metric("Batter's extra-base hit threat (ISO)", f"{b_iso:.3f}")
+                    res_col5.metric("Pitcher's independent ERA (FIP)", f"{p_fip:.2f}")
 
-                    # 進階戰術建議提示 (整合安打預測)
+                    # Advanced tactical advice tips (integrating hit prediction)
                     st.markdown("---")
                     if pred_hr > 0.08:
-                        st.error("🚨 **高風險警告 (長打)**：這名打者對戰此投手的開轟機率極高！若為關鍵時刻，建議考慮**敬遠保送 (IBB)** 或配球盡量閃躲。")
+                        st.error("🚨 **High risk warning (extra-base hit)**: This batter has an extremely high home run rate against this pitcher! If it's a critical moment, consider **intentional walk (IBB)** or pitching to avoid.")
                     elif pred_hit > 0.350:
-                        st.warning("⚠️ **高上壘風險 (安打)**：打者擊出安打的期望值很高，內野守備建議稍微退深或針對打者擊球習性佈陣 (Shift)。")
+                        st.warning("⚠️ **High on-base risk (hit)**: The batter has a high expected value for hits, infield defense should shift back or position based on batter's hitting tendencies (Shift).")
                     elif pred_k > 0.35:
-                        st.success("🎯 **三振優勢**：投手在此對決中擁有極高的三振率優勢，可以大膽使用決勝球 (Putaway Pitch) 攻擊好球帶！")
+                        st.success("🎯 **Strikeout advantage**: The pitcher has an extremely high strikeout rate advantage in this matchup, can boldly use putaway pitches to attack the strike zone!")
                     else:
-                        st.info("⚖️ **勢均力敵**：這是一個標準的投打對決，結果將很大程度取決於當天的臨場控球與擊球掌握度 (Contact)。")
+                        st.info("⚖️ **Even matchup**: This is a standard pitcher vs batter matchup, the result will largely depend on the day's control and contact.")
+
+            with tab6:
+                st.subheader("📖 Term Dictionary & Algorithms")
+                st.info("Here you can find definitions for all sabermetrics and the inner workings of our ML/Simulation models.")
+
+                col_dict1, col_dict2 = st.columns(2)
+
+                with col_dict1:
+                    st.markdown("### 🦇 Batting Metrics")
+                    
+                    with st.expander("📊 Basic Batting Stats", expanded=True):
+                        st.markdown("""
+                        * **AVG (Batting Average)**: Hits divided by At Bats (H / AB). The traditional metric for a player's hitting ability.
+                        * **OBP (On-Base Percentage)**: How frequently a batter reaches base (Hits + Walks + Hit By Pitch).
+                        * **SLG (Slugging Percentage)**: Measures a batter's power by calculating total bases divided by at-bats (TB / AB).
+                        * **OPS (On-Base Plus Slugging)**: OBP + SLG. A comprehensive metric for a batter's overall offensive production.
+                        * **AB (At Bats)**: Official plate appearances, excluding walks, hit-by-pitches, and sacrifices.
+                        * **R (Runs) / H (Hits)**: Number of times crossing home plate / Number of successful hits.
+                        * **2B / 3B / HR**: Doubles / Triples / Home Runs.
+                        * **RBI (Runs Batted In)**: Number of runs scored as a result of the batter's action.
+                        * **BB (Walks) / SO (Strikeouts)**: Free passes to first base / Number of times struck out.
+                        """)
+
+                    with st.expander("🔬 Advanced Batting Stats"):
+                        st.markdown("""
+                        * **PA (Plate Appearances)**: Total number of times the batter steps into the box.
+                        * **BABIP (Batting Average on Balls In Play)**: The rate at which batted balls (excluding home runs and strikeouts) fall for hits. Often used to measure luck.
+                        * **ISO (Isolated Power)**: SLG minus AVG. Measures a batter's pure power. Values > .200 indicate a strong power hitter.
+                        * **K% (Strikeout Rate)**: SO divided by PA.
+                        * **BB% (Walk Rate)**: BB divided by PA. An excellent indicator of plate discipline and batting eye.
+                        * **RC (Runs Created)**: A metric created by Bill James estimating how many runs a player has contributed to their team.
+                        * **GPA (Gross Production Average)**: Similar to OPS, but weights OBP 1.8 times heavier to reflect its true statistical value to scoring runs.
+                        """)
+
+                with col_dict2:
+                    st.markdown("### ⚾ Pitching Metrics")
+
+                    with st.expander("📋 Basic Pitching Stats", expanded=True):
+                        st.markdown("""
+                        * **ERA (Earned Run Average)**: The average number of earned runs a pitcher gives up per 9 innings pitched.
+                        * **IP (Innings Pitched)**: The number of innings a pitcher has completed. 
+                        * **WHIP (Walks and Hits Per Inning Pitched)**: The average number of baserunners a pitcher allows per inning.
+                        * **W / L (Wins / Losses)**: Standard pitching decisions.
+                        * **SV (Saves)**: Awarded to a relief pitcher who finishes a game for the winning team under certain circumstances.
+                        * **H / ER (Hits / Earned Runs)**: Total hits allowed / Runs allowed that were not the result of defensive errors.
+                        * **BB / SO (Walks / Strikeouts)**: Free passes allowed / Batters struck out.
+                        * **HR (Home Runs Allowed)**: Number of home runs given up by the pitcher.
+                        """)
+
+                    with st.expander("🔬 Advanced Pitching Stats"):
+                        st.markdown("""
+                        * **TBF (Total Batters Faced)**: The total number of batters the pitcher has pitched to.
+                        * **FIP (Fielding Independent Pitching)**: Estimates a pitcher's ERA based *only* on outcomes they control (strikeouts, walks, hit-by-pitches, home runs). It excludes defense and luck.
+                        * **Opp BABIP**: The opponent's Batting Average on Balls In Play. A very high number suggests bad luck or poor defense behind the pitcher.
+                        * **K% / BB%**: Strikeout Rate / Walk Rate against total batters faced.
+                        * **K-BB% (Strikeout minus Walk Rate)**: A core modern metric for evaluating a pitcher's pure dominance and command.
+                        """)
+
+                st.divider()
+                
+                st.markdown("### 🤖 Models & Algorithms")
+
+                with st.expander("🧠 Pitching Analytics [ML]", expanded=True):
+                    st.markdown("""
+                    #### 1. Pitcher Style Clustering
+                    * **Algorithm**: **K-Means Clustering**
+                    * **Logic**: The system extracts four core features from all pitchers: `K%`, `BB%`, `Opp BABIP`, and `FIP`. Using K-Means unsupervised learning, it projects all pitchers into a multi-dimensional space and automatically finds 3 cluster centroids.
+                    * **Categories**: 
+                        * **Power Pitchers**: Generally possess high K%, but may be accompanied by a higher BB%.
+                        * **Efficiency/Ground Ball**: Lower K%, but excellent FIP, meaning they rely on inducing weak contact and outs rather than strikeouts.
+                        * **Wild/Struggling**: High BB% combined with struggling FIP metrics.
+                    
+                    #### 2. ERA Regression Risk Detection
+                    * **Algorithm**: **Luck Index Calculation (ERA minus FIP)**
+                    * **Logic**: Calculates the difference between ERA and FIP. ERA is easily influenced by the defense behind the pitcher or sheer luck, whereas FIP isolates the pitcher's true performance.
+                    * **Application**: If ERA is significantly lower than FIP (negative value), the system flags them as "Lucky", warning of future regression. If ERA is higher, it suggests their true skill is currently undervalued due to bad luck.
+                    """)
+
+                with st.expander("⚔️ BP Sim (Matchup Expected Value)", expanded=True):
+                    st.markdown("""
+                    The Matchup Simulation is built upon the **Log-5 Method** (introduced by baseball historian Bill James) combined with the interaction of modern sabermetrics.
+
+                    #### 1. Predicted xBA (Expected Batting Average)
+                    * **Core Formula**: `Log-5 Method`
+                    * **Logic**: It takes the Batter's AVG, Pitcher's Opponent AVG, and the League AVG, and inputs them into the Log-5 equation:
+                    $$Expected = \\frac{\\frac{Bat \\times Pit}{Lg}}{\\frac{Bat \\times Pit}{Lg} + \\frac{(1-Bat) \\times (1-Pit)}{(1-Lg)}}$$
+                    * **Meaning**: If a .300 batter faces an elite pitcher who only allows a .200 average, Log-5 calculates the mathematically expected probability of a hit occurring when these two forces collide.
+
+                    #### 2. Predicted K% (Strikeout Probability)
+                    * **Core Formula**: `(Batter K% × Pitcher K%) / League K%`
+                    * **Logic**: Combines the batter's tendency to strike out with the pitcher's ability to induce strikeouts, weighted against the league baseline. 
+
+                    #### 3. Predicted HR% (Home Run Probability)
+                    * **Core Formula**: `(Batter ISO × 0.2) × (Pitcher FIP / 3.15)`
+                    * **Logic**: Uses the batter's Isolated Power (ISO) as a baseline for strength, and multiplies it by the ratio of the pitcher's FIP. This acts as a proxy model to evaluate the "spark" generated when a batter's raw power meets a pitcher's overall suppressive ability.
+                    """)

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import xgboost as xgb
 
-# ======== 請加上這兩行 ========
+# ======== Please add these two lines ========
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
