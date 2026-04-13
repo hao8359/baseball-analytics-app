@@ -796,7 +796,7 @@ if not df_batting.empty:
                             st.write(f"**Command (K-BB%):** {kbb_l}")
 
                             st.markdown("**💡 Coaching Insight:**")
-                            if p_row['era'] > p_row['fip'] + 1.0:
+                            if p_row['era'] > p_row['fip'] + 3.0:
                                 st.success("Luck Factor: You are pitching better than your ERA suggests. Don't change your routine!")
                             elif p_row['k_minus_bb_pct'] > df_pitching['k_minus_bb_pct'].mean():
                                 st.success("Strikeout Artist: High ability to finish hitters. Use your put-away pitch early.")
