@@ -182,19 +182,38 @@ def rename_pitching_cols(df):
 # ==========================================
 st.title("⚾ 2025 Baseball Analytics System")
 
-df_all = load_data()
+# 1. Define safe_divide globally once
+def safe_divide(numerator, denominator):
+    return np.where(denominator == 0, 0, numerator / denominator)
 
-if not df_all.empty:
-    # Top Control Panel
+# 2. Load both datasets
+df_batting = load_data()          
+df_pitching = load_pitching_data() 
+
+if not df_batting.empty:
+    # --- CALCULATE LEAGUE-WIDE BATTING METRICS FIRST ---
+    # This ensures Tab 7 can calculate percentiles correctly
+    df_batting['pa'] = df_batting['ab'] + df_batting['bb'] + df_batting['hbp'] + df_batting['sf'] + df_batting['sh']
+    
+    babip_denom = df_batting['ab'] - df_batting['so'] - df_batting['hr'] + df_batting['sf']
+    df_batting['babip'] = safe_divide(df_batting['h'] - df_batting['hr'], babip_denom)
+    
+    df_batting['iso'] = df_batting['slg'] - df_batting['avg'] # Changed from iso_val to iso
+    df_batting['k_pct'] = safe_divide(df_batting['so'], df_batting['pa'])
+    df_batting['bb_pct'] = safe_divide(df_batting['bb'], df_batting['pa'])
+    df_batting['rc'] = safe_divide((df_batting['h'] + df_batting['bb']) * df_batting['tb'], (df_batting['ab'] + df_batting['bb']))
+    df_batting['gpa'] = (1.8 * df_batting['obp'] + df_batting['slg']) / 4 # Changed from gpa_val to gpa
+
+    # 3. Top Control Panel
     col1, col2 = st.columns([1, 2])
     with col1:
         selected_team = st.selectbox("Select Team to Analyze:", list(TEAM_IDS.keys()))
     with col2:
-        min_ab = st.slider("Minimum At Bats (AB) Filter:", 1, 50, 10) # Filter AB >= 10
+        min_ab = st.slider("Minimum At Bats (AB) Filter:", 1, 50, 10)
     
-    # Filter by Team and AB
+    # 4. Filter by Team and AB (df_team now inherits the calculated columns)
     target_id = TEAM_IDS[selected_team]
-    df_team = df_all[(df_all['teamid'].astype(str) == target_id) & (df_all['ab'] >= min_ab)].copy()
+    df_team = df_batting[(df_batting['teamid'].astype(str) == target_id) & (df_batting['ab'] >= min_ab)].copy()
     
     if df_team.empty:
         st.warning(f"No players found with AB >= {min_ab}.")
@@ -221,14 +240,15 @@ if not df_all.empty:
         # Correct way to write (add the 3rd title)
         # Replace with writing containing 5 tabs
         # 加入第 6 個標題 "📖 數據字典"
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-            "📋 Batting Basic stats", 
-            "🔬 Batting Advanced stats", 
-            "🥎 Pitching Stats", 
-            "🤖 Pitching Analytics[ML]", 
-            "⚾ BP Sim", 
-            "📖 Term Dictionary"
-        ])
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "📋 Batting Basic", 
+        "🔬 Batting Adv", 
+        "🥎 Pitching Basic", 
+        "🤖 Pitching ML", 
+        "⚔️ BP Sim", 
+        "📖 Glossary",
+        "👤 Player Profile"
+    ])
         
         # --- Tab 1: Basic Stats (Rate Stats moved to front) ---
         with tab1:
@@ -702,3 +722,113 @@ if not df_all.empty:
                     * **Core Formula**: `(Batter ISO × 0.2) × (Pitcher FIP / 3.15)`
                     * **Logic**: Uses the batter's Isolated Power (ISO) as a baseline for strength, and multiplies it by the ratio of the pitcher's FIP. This acts as a proxy model to evaluate the "spark" generated when a batter's raw power meets a pitcher's overall suppressive ability.
                     """)
+            # ==========================================
+            # --- Tab 7: 👤 Individual Player Profile ---
+            # ==========================================
+            with tab7:
+                st.subheader("👤 Individual Player Intelligence Profile")
+                st.info("Select a player to generate a comprehensive AI-driven scouting report.")
+
+                # Merge names from both datasets to ensure we see everyone
+                batting_names = df_batting['name_clean'].unique().tolist() if not df_batting.empty else []
+                pitching_names = df_pitching['name_clean'].unique().tolist() if not df_pitching.empty else []
+                all_players = sorted(list(set(batting_names + pitching_names)))
+                
+                selected_p = st.selectbox("Search & Select Player:", all_players, key="profile_select")
+
+                if selected_p:
+                    p_col1, p_col2 = st.columns([1, 1.5])
+                    
+                    # These will now work because df_batting and df_pitching were defined globally
+                    b_data = df_batting[df_batting['name_clean'] == selected_p]
+                    p_data = df_pitching[df_pitching['name_clean'] == selected_p]
+                    with p_col1:
+                        st.markdown(f"## {selected_p}")
+                        # 顯示球隊資訊
+                        team_name = b_data['teamcode'].iloc[0] if not b_data.empty else p_data['teamcode'].iloc[0]
+                        st.markdown(f"**Team:** {team_name} | **Primary Role:** {'Two-way' if not b_data.empty and not p_data.empty else ('Batter' if not b_data.empty else 'Pitcher')}")
+                        
+                        # -------------------------
+                        # 機器學習邏輯：計算百分位數 (Percentile Rank)
+                        # -------------------------
+                        def get_rank_label(val, series, inverse=False):
+                            if series.empty: return "N/A"
+                            percentile = (series < val).mean() if not inverse else (series > val).mean()
+                            if percentile >= 0.90: return "🌟 Elite (Top 10%)"
+                            if percentile >= 0.75: return "✅ Great (Top 25%)"
+                            if percentile >= 0.40: return "🔵 Average"
+                            return "⚠️ Below Avg"
+
+                        # --- B. 打擊優劣勢分析 ---
+                        if not b_data.empty:
+                            st.divider()
+                            st.markdown("### 🦇 Batting Scouting Report")
+                            row = b_data.iloc[0]
+                            
+                            # 計算 GPA, ISO, K% 的全聯盟排名
+                            gpa_l = get_rank_label(row['gpa'], df_batting['gpa'])
+                            iso_l = get_rank_label(row['iso'], df_batting['iso'])
+                            k_l = get_rank_label(row['k_pct'], df_batting['k_pct'], inverse=True) # 三振率越低越好
+                            
+                            st.write(f"**Overall Production (GPA):** {gpa_l}")
+                            st.write(f"**Power Threat (ISO):** {iso_l}")
+                            st.write(f"**Plate Discipline (K%):** {k_l}")
+                            
+                            # AI 建議 (簡單邏輯判斷)
+                            st.markdown("**💡 Tactical Advice:**")
+                            if row['k_pct'] > df_batting['k_pct'].mean() and row['iso'] > df_batting['iso'].mean():
+                                st.warning("Classic Power Hitter: High reward, but high strikeout risk. Focus on contact in 2-strike counts.")
+                            elif row['obp'] > df_batting['obp'].mean() and row['iso'] < df_batting['iso'].mean():
+                                st.success("On-base Specialist: Excellent at drawing walks. Ideal for Lead-off or #2 spot.")
+                            else:
+                                st.info("Balanced Profile: Adaptable to various spots in the lineup.")
+
+                        # --- C. 投球優劣勢分析 ---
+                        if not p_data.empty:
+                            st.divider()
+                            st.markdown("### ⚾ Pitching Scouting Report")
+                            p_row = p_data.iloc[0]
+                            
+                            fip_l = get_rank_label(p_row['fip'], df_pitching['fip'], inverse=True) # FIP越低越好
+                            kbb_l = get_rank_label(p_row['k_minus_bb_pct'], df_pitching['k_minus_bb_pct'])
+                            
+                            st.write(f"**True Dominance (FIP):** {fip_l}")
+                            st.write(f"**Command (K-BB%):** {kbb_l}")
+
+                            st.markdown("**💡 Coaching Insight:**")
+                            if p_row['era'] > p_row['fip'] + 1.0:
+                                st.success("Luck Factor: You are pitching better than your ERA suggests. Don't change your routine!")
+                            elif p_row['k_minus_bb_pct'] > df_pitching['k_minus_bb_pct'].mean():
+                                st.success("Strikeout Artist: High ability to finish hitters. Use your put-away pitch early.")
+
+                    with p_col2:
+                        # --- D. 雷達圖可視化 (Radar Chart) ---
+                        if not b_data.empty:
+                            st.markdown("### 📊 Skill Attribute Map")
+                            # 準備雷達圖數據 (標準化為 0-100)
+                            categories = ['AVG', 'OBP', 'SLG', 'K% (Inv)', 'BB%']
+                            
+                            # 計算百分位數作為雷達圖的分數
+                            def get_p_val(val, series, inv=False):
+                                return (series < val).mean() * 100 if not inv else (series > val).mean() * 100
+
+                            stats_val = [
+                                get_p_val(row['avg'], df_batting['avg']),
+                                get_p_val(row['obp'], df_batting['obp']),
+                                get_p_val(row['slg'], df_batting['slg']),
+                                get_p_val(row['k_pct'], df_batting['k_pct'], True),
+                                get_p_val(row['bb_pct'], df_batting['bb_pct'])
+                            ]
+                            
+                            # 繪製簡單的雷達圖
+                            fig_radar, ax_radar = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+                            angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+                            stats_val += stats_val[:1] # 閉合圖形
+                            angles += angles[:1]
+                            
+                            ax_radar.fill(angles, stats_val, color='red', alpha=0.25)
+                            ax_radar.plot(angles, stats_val, color='red', linewidth=2)
+                            ax_radar.set_yticklabels([]) # 隱藏圓圈標籤
+                            ax_radar.set_xticks(angles[:-1])
+                            ax_radar.set_xticklabels(categories)
+                            st.pyplot(fig_radar)
