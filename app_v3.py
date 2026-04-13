@@ -148,9 +148,6 @@ def load_pitching_data():
         df['k_pct'] = safe_divide(df['pitch_so'], df['tbf'])
         df['bb_pct'] = safe_divide(df['pitch_bb'], df['tbf'])
         df['k_minus_bb_pct'] = df['k_pct'] - df['bb_pct']
-        # 👇 ADD THIS NEW CALCULATION 👇
-        # 5. Ground/Fly Ratio (GB/FB)
-        df['gb_fb_ratio'] = safe_divide(df['pitch_ground'], df['pitch_fly'])
 
         return df
     except Exception as e:
@@ -373,66 +370,47 @@ if not df_all.empty:
                 if not df_pitchers_all.empty:
                     st.subheader(f"🤖 Machine Learning Analysis (Pitching Side) - {selected_team}")
                     
-                   # ==========================================
-                    # Enhanced Machine Learning Model (4 Clusters)
                     # ==========================================
-                    # 1. Add gb_fb_ratio to the training features
-                    features = ['k_pct', 'bb_pct', 'opp_babip', 'fip', 'gb_fb_ratio']
+                    # First use "league-wide" data to train the model to ensure accuracy
+                    # ==========================================
+                    features = ['k_pct', 'bb_pct', 'opp_babip', 'fip']
                     X = df_pitchers_all[features].fillna(0)
                     scaler = StandardScaler()
                     X_scaled = scaler.fit_transform(X)
                     
-                    # 2. Execute K-Means clustering (Now upgraded to 4 clusters)
-                    kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+                    # Execute K-Means clustering
+                    kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
                     df_pitchers_all['cluster'] = kmeans.fit_predict(X_scaled)
-                    
-                    # 3. Dynamic Labeling: Safely label clusters based on their mathematical centroids
-                    cluster_centers = pd.DataFrame(scaler.inverse_transform(kmeans.cluster_centers_), columns=features)
-                    style_map = {}
-                    
-                    for i, row in cluster_centers.iterrows():
-                        if row['bb_pct'] == cluster_centers['bb_pct'].max() and row['fip'] > 4.0:
-                            style_map[i] = "Wild/Struggling"
-                        elif row['gb_fb_ratio'] == cluster_centers['gb_fb_ratio'].max():
-                            style_map[i] = "Groundball Specialist"
-                        elif row['k_pct'] == cluster_centers['k_pct'].max():
-                            style_map[i] = "Power/Strikeout"
-                        else:
-                            style_map[i] = "Finesse/Control"
-                            
-                    df_pitchers_all['style'] = df_pitchers_all['cluster'].map(style_map)
+                    cluster_mapping = {0: "Power Pitchers", 1: "Efficiency/Ground Ball", 2: "Wild/Struggling"}
+                    df_pitchers_all['style'] = df_pitchers_all['cluster'].map(cluster_mapping)
                     
                     # Calculate luck index (ERA minus FIP)
                     df_pitchers_all['era_minus_fip'] = df_pitchers_all['era'] - df_pitchers_all['fip']
                     
-                    # Filter for the selected team
+                    # ==========================================
+                    # This is the most important: Filter the predicted results to the "currently selected team"
+                    # ==========================================
                     target_id = TEAM_IDS[selected_team]
                     df_team_pitchers = df_pitchers_all[df_pitchers_all['teamid'].astype(str) == target_id].copy()
 
                     if df_team_pitchers.empty:
                         st.warning(f"Currently {selected_team} has no pitcher data that meets the conditions (innings pitched >= 5).")
                     else:
-                        st.markdown("### 1. Enhanced Pitcher Style Clustering")
+                        st.markdown("### 1. Pitcher Style Clustering (Clustering)")
                         
                         fig_cluster, ax_cluster = plt.subplots(figsize=(8, 5))
                         
-                        # Plot: GB/FB Ratio (X-axis) vs K% (Y-axis)
-                        sns.scatterplot(data=df_team_pitchers, x='gb_fb_ratio', y='k_pct', hue='style', s=150, ax=ax_cluster)
+                        # Draw the scatter plot of the team's pitchers
+                        sns.scatterplot(data=df_team_pitchers, x='k_pct', y='bb_pct', hue='style', s=150, ax=ax_cluster)
                         
-                        # Add player name labels
+                        # Add player name labels next to the points for easy identification
                         for _, row in df_team_pitchers.iterrows():
-                            ax_cluster.text(row['gb_fb_ratio'] + 0.05, row['k_pct'] + 0.002, row['name_clean'], fontsize=9)
+                            ax_cluster.text(row['k_pct'] + 0.005, row['bb_pct'], row['name_clean'], fontsize=10)
 
-                        # Update Chart formatting
-                        ax_cluster.set_title(f"Pitcher Styles ({selected_team}): GB/FB Ratio vs Strikeout Rate")
-                        ax_cluster.set_xlabel("Groundball/Flyball Ratio (GB/FB)")
-                        ax_cluster.set_ylabel("Strikeout Rate (K%)")
-                        
-                        # Format Y-axis as percentage (X-axis stays as standard float ratio)
-                        ax_cluster.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.0%}'))
-                        
-                        # Move legend outside the plot so it doesn't cover data points
-                        ax_cluster.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+                        ax_cluster.set_title(f"Pitcher Styles ({selected_team}): K% vs BB%")
+                        # Format X and Y axes as percentages
+                        ax_cluster.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+                        ax_cluster.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
                         st.pyplot(fig_cluster)
                         
                         st.divider()
@@ -669,14 +647,12 @@ if not df_all.empty:
                 with st.expander("🧠 Pitching Analytics [ML]", expanded=True):
                     st.markdown("""
                     #### 1. Pitcher Style Clustering
-                    #### 1. Enhanced Pitcher Style Clustering
-                    * **Algorithm**: **K-Means Clustering (4 Clusters)**
-                    * **Logic**: The system extracts five core features from all pitchers: `K%`, `BB%`, `Opp BABIP`, `FIP`, and the newly added `GB/FB Ratio` (Groundball/Flyball Ratio). Using K-Means unsupervised learning, it projects all pitchers into a multi-dimensional space and automatically finds 4 distinct cluster centroids. The system uses dynamic mathematical labeling to ensure accurate categorization regardless of shifting league averages.
+                    * **Algorithm**: **K-Means Clustering**
+                    * **Logic**: The system extracts four core features from all pitchers: `K%`, `BB%`, `Opp BABIP`, and `FIP`. Using K-Means unsupervised learning, it projects all pitchers into a multi-dimensional space and automatically finds 3 cluster centroids.
                     * **Categories**: 
-                        * **Power/Strikeout**: Pitchers who possess the highest strikeout rates (K%). They overpower hitters to miss bats, though they may occasionally be prone to fly balls.
-                        * **Groundball Specialist**: Pitchers with the highest Groundball-to-Flyball ratios (GB/FB). They rely heavily on sinkers or breaking balls down in the zone to induce weak grounders and double plays, effectively keeping the ball in the park.
-                        * **Finesse/Control**: Pitchers who excel at limiting walks and managing contact. They maintain solid independent metrics (FIP) without necessarily relying on elite strikeout numbers.
-                        * **Wild/Struggling**: Pitchers exhibiting the highest walk rates (BB%) combined with elevated FIPs (> 4.0), indicating severe command issues and difficulty preventing runs.
+                        * **Power Pitchers**: Generally possess high K%, but may be accompanied by a higher BB%.
+                        * **Efficiency/Ground Ball**: Lower K%, but excellent FIP, meaning they rely on inducing weak contact and outs rather than strikeouts.
+                        * **Wild/Struggling**: High BB% combined with struggling FIP metrics.
                     
                     #### 2. ERA Regression Risk Detection
                     * **Algorithm**: **Luck Index Calculation (ERA minus FIP)**
