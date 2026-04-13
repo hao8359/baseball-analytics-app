@@ -4,3 +4,5 @@ requests
 numpy
 matplotlib
 seaborn
+scikit-learn
+xgbboost
