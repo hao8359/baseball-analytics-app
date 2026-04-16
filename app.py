@@ -272,7 +272,6 @@ def load_pitching_data():
 
         return df
     except Exception as e:
-        import streamlit as st
         st.error(f"Error loading pitching data: {e}")
         return pd.DataFrame()
     
@@ -358,15 +357,14 @@ if not df_batting.empty:
         # Correct way to write (add the 3rd title)
         # Replace with writing containing 5 tabs
         # 加入第 6 個標題 "📖 數據字典"
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📋 Batting Basic", 
         "🔬 Batting Adv", 
         "🥎 Pitching Basic", 
         "🤖 Pitching ML", 
         "⚔️ BP Sim", 
-        "📖 Glossary",
-        "👤 Player Profile",
-        "📊 Defensive Positions"
+        "📖 Glossary"
+        #"📊 Defensive Positions"
     ])
         
         # --- Tab 1: Basic Stats (Rate Stats moved to front) ---
@@ -374,12 +372,12 @@ if not df_batting.empty:
             st.subheader(f"📋 Raw Performance Data: {selected_team}")
             # Rearranged columns as requested
             basic_columns = [
-                'name_clean', 'ab', 'avg', 'obp', 'slg', 'ops', # Primary Rate Stats first
-                'g', 'gs', 'r', 'h', 'double', 'triple', 'hr', 'rbi', 
-                'tb', 'bb', 'hbp', 'so', 'gdp', 'sf', 'sh', 'sb', 'cs'
+                'name_clean', 'ab', 'g', 'gs', 'r', 'h', 'double', 'triple', 'hr', 'rbi', 
+                'tb', 'avg', 'obp', 'slg', 'ops', 'bb', 'hbp', 'so', 'gdp', 'sf', 'sh', 'sb', 'cs'
             ]
             
             # Filter valid columns to avoid KeyError
+            
             available_basic_cols = [c for c in basic_columns if c in df_team.columns]
             
             st.dataframe(
@@ -495,11 +493,11 @@ if not df_batting.empty:
                     
                     st.dataframe(
                         df_team_pitchers[adv_pitching_cols].rename(columns=adv_rename_map).style.format({
-                            'fip': '{:.2f}', 
-                            'opp_babip': '{:.3f}', 
-                            'k_pct': '{:.1%}', 
-                            'bb_pct': '{:.1%}', 
-                            'k_minus_bb_pct': '{:.1%}'
+                            'FIP': '{:.2f}', 
+                            'BABIP': '{:.3f}', 
+                            'K%': '{:.1%}', 
+                            'BB%': '{:.1%}', 
+                            'K-BB%': '{:.1%}'
                         }),
                         use_container_width=True,
                         hide_index=True
@@ -721,7 +719,7 @@ if not df_batting.empty:
                 with col_dict1:
                     st.markdown("### 🦇 Batting Metrics")
                     
-                    with st.expander("📊 Basic Batting Stats", expanded=True):
+                    with st.expander("📊 Basic Batting Stats"):
                         st.markdown("""
                         * **G (Games Played)**: Total number of games the player has participated in.
                         * **GS (Games Started)**: Total number of games the player started in the starting lineup.
@@ -761,7 +759,7 @@ if not df_batting.empty:
                 with col_dict2:
                     st.markdown("### ⚾ Pitching Metrics")
 
-                    with st.expander("📋 Basic Pitching Stats", expanded=True):
+                    with st.expander("📋 Basic Pitching Stats"):
                         st.markdown("""
                         * **W (Wins)**: The number of games where the pitcher was credited with the victory.
                         * **L (Losses)**: The number of games where the pitcher was credited with the defeat.
@@ -805,7 +803,7 @@ if not df_batting.empty:
                 
                 st.markdown("### 🤖 Models & Algorithms")
 
-                with st.expander("🧠 Pitching Analytics [ML]", expanded=True):
+                with st.expander("🧠 Pitching Analytics [ML]"):
                     st.markdown("""
                     #### 1. Pitcher Style Clustering
                     #### 1. Enhanced Pitcher Style Clustering
@@ -823,7 +821,7 @@ if not df_batting.empty:
                     * **Application**: If ERA is significantly lower than FIP (negative value), the system flags them as "Lucky", warning of future regression. If ERA is higher, it suggests their true skill is currently undervalued due to bad luck.
                     """)
 
-                with st.expander("⚔️ BP Sim (Matchup Expected Value)", expanded=True):
+                with st.expander("⚔️ BP Sim (Matchup Expected Value)"):
                     st.markdown("""
                     The Matchup Simulation is built upon the **Log-5 Method** (introduced by baseball historian Bill James) combined with the interaction of modern sabermetrics.
 
@@ -844,148 +842,148 @@ if not df_batting.empty:
             # ==========================================
             # --- Tab 7: 👤 Individual Player Profile ---
             # ==========================================
-            with tab7:
-                st.subheader("👤 Individual Player Intelligence Profile")
-                st.info("Select a player to generate a comprehensive AI-driven scouting report.")
+            #with tab7:
+                # st.subheader("👤 Individual Player Intelligence Profile")
+                # st.info("Select a player to generate a comprehensive AI-driven scouting report.")
 
-                # Merge names from both datasets to ensure we see everyone
-                batting_names = df_batting['name_clean'].unique().tolist() if not df_batting.empty else []
-                pitching_names = df_pitching['name_clean'].unique().tolist() if not df_pitching.empty else []
-                all_players = sorted(list(set(batting_names + pitching_names)))
+                # # Merge names from both datasets to ensure we see everyone
+                # batting_names = df_batting['name_clean'].unique().tolist() if not df_batting.empty else []
+                # pitching_names = df_pitching['name_clean'].unique().tolist() if not df_pitching.empty else []
+                # all_players = sorted(list(set(batting_names + pitching_names)))
                 
-                selected_p = st.selectbox("Search & Select Player:", all_players, key="profile_select")
+                # selected_p = st.selectbox("Search & Select Player:", all_players, key="profile_select")
 
-                if selected_p:
-                    p_col1, p_col2 = st.columns([1, 1.5])
+                # if selected_p:
+                #     p_col1, p_col2 = st.columns([1, 1.5])
                     
-                    # These will now work because df_batting and df_pitching were defined globally
-                    b_data = df_batting[df_batting['name_clean'] == selected_p]
-                    p_data = df_pitching[df_pitching['name_clean'] == selected_p]
-                    with p_col1:
-                        st.markdown(f"## {selected_p}")
-                        # 顯示球隊資訊
-                        team_name = b_data['teamcode'].iloc[0] if not b_data.empty else p_data['teamcode'].iloc[0]
-                        st.markdown(f"**Team:** {team_name} | **Primary Role:** {'Two-way' if not b_data.empty and not p_data.empty else ('Batter' if not b_data.empty else 'Pitcher')}")
+                #     # These will now work because df_batting and df_pitching were defined globally
+                #     b_data = df_batting[df_batting['name_clean'] == selected_p]
+                #     p_data = df_pitching[df_pitching['name_clean'] == selected_p]
+                #     with p_col1:
+                #         st.markdown(f"## {selected_p}")
+                #         # 顯示球隊資訊
+                #         team_name = b_data['teamcode'].iloc[0] if not b_data.empty else p_data['teamcode'].iloc[0]
+                #         st.markdown(f"**Team:** {team_name} | **Primary Role:** {'Two-way' if not b_data.empty and not p_data.empty else ('Batter' if not b_data.empty else 'Pitcher')}")
                         
-                        # -------------------------
-                        # 機器學習邏輯：計算百分位數 (Percentile Rank)
-                        # -------------------------
-                        def get_rank_label(val, series, inverse=False):
-                            if series.empty: return "N/A"
-                            percentile = (series < val).mean() if not inverse else (series > val).mean()
-                            if percentile >= 0.90: return "🌟 Elite (Top 10%)"
-                            if percentile >= 0.75: return "✅ Great (Top 25%)"
-                            if percentile >= 0.40: return "🔵 Average"
-                            return "⚠️ Below Avg"
+                #         # -------------------------
+                #         # 機器學習邏輯：計算百分位數 (Percentile Rank)
+                #         # -------------------------
+                #         def get_rank_label(val, series, inverse=False):
+                #             if series.empty: return "N/A"
+                #             percentile = (series < val).mean() if not inverse else (series > val).mean()
+                #             if percentile >= 0.90: return "🌟 Elite (Top 10%)"
+                #             if percentile >= 0.75: return "✅ Great (Top 25%)"
+                #             if percentile >= 0.40: return "🔵 Average"
+                #             return "⚠️ Below Avg"
 
-                        # --- B. 打擊優劣勢分析 ---
-                        if not b_data.empty:
-                            st.divider()
-                            st.markdown("### 🦇 Batting Scouting Report")
-                            row = b_data.iloc[0]
+                #         # --- B. 打擊優劣勢分析 ---
+                #         if not b_data.empty:
+                #             st.divider()
+                #             st.markdown("### 🦇 Batting Scouting Report")
+                #             row = b_data.iloc[0]
                             
-                            # 計算 GPA, ISO, K% 的全聯盟排名
-                            gpa_l = get_rank_label(row['gpa'], df_batting['gpa'])
-                            iso_l = get_rank_label(row['iso'], df_batting['iso'])
-                            k_l = get_rank_label(row['k_pct'], df_batting['k_pct'], inverse=True) # 三振率越低越好
+                #             # 計算 GPA, ISO, K% 的全聯盟排名
+                #             gpa_l = get_rank_label(row['gpa'], df_batting['gpa'])
+                #             iso_l = get_rank_label(row['iso'], df_batting['iso'])
+                #             k_l = get_rank_label(row['k_pct'], df_batting['k_pct'], inverse=True) # 三振率越低越好
                             
-                            st.write(f"**Overall Production (GPA):** {gpa_l}")
-                            st.write(f"**Power Threat (ISO):** {iso_l}")
-                            st.write(f"**Plate Discipline (K%):** {k_l}")
+                #             st.write(f"**Overall Production (GPA):** {gpa_l}")
+                #             st.write(f"**Power Threat (ISO):** {iso_l}")
+                #             st.write(f"**Plate Discipline (K%):** {k_l}")
                             
-                            # AI 建議 (簡單邏輯判斷)
-                            st.markdown("**💡 Tactical Advice:**")
-                            if row['k_pct'] > df_batting['k_pct'].mean() and row['iso'] > df_batting['iso'].mean():
-                                st.warning("Classic Power Hitter: High reward, but high strikeout risk. Focus on contact in 2-strike counts.")
-                            elif row['obp'] > df_batting['obp'].mean() and row['iso'] < df_batting['iso'].mean():
-                                st.success("On-base Specialist: Excellent at drawing walks. Ideal for Lead-off or #2 spot.")
-                            else:
-                                st.info("Balanced Profile: Adaptable to various spots in the lineup.")
+                #             # AI 建議 (簡單邏輯判斷)
+                #             st.markdown("**💡 Tactical Advice:**")
+                #             if row['k_pct'] > df_batting['k_pct'].mean() and row['iso'] > df_batting['iso'].mean():
+                #                 st.warning("Classic Power Hitter: High reward, but high strikeout risk. Focus on contact in 2-strike counts.")
+                #             elif row['obp'] > df_batting['obp'].mean() and row['iso'] < df_batting['iso'].mean():
+                #                 st.success("On-base Specialist: Excellent at drawing walks. Ideal for Lead-off or #2 spot.")
+                #             else:
+                #                 st.info("Balanced Profile: Adaptable to various spots in the lineup.")
 
-                        # --- C. 投球優劣勢分析 ---
-                        if not p_data.empty:
-                            st.divider()
-                            st.markdown("### ⚾ Pitching Scouting Report")
-                            p_row = p_data.iloc[0]
+                #         # --- C. 投球優劣勢分析 ---
+                #         if not p_data.empty:
+                #             st.divider()
+                #             st.markdown("### ⚾ Pitching Scouting Report")
+                #             p_row = p_data.iloc[0]
                             
-                            fip_l = get_rank_label(p_row['fip'], df_pitching['fip'], inverse=True) # FIP越低越好
-                            kbb_l = get_rank_label(p_row['k_minus_bb_pct'], df_pitching['k_minus_bb_pct'])
+                #             fip_l = get_rank_label(p_row['fip'], df_pitching['fip'], inverse=True) # FIP越低越好
+                #             kbb_l = get_rank_label(p_row['k_minus_bb_pct'], df_pitching['k_minus_bb_pct'])
                             
-                            st.write(f"**True Dominance (FIP):** {fip_l}")
-                            st.write(f"**Command (K-BB%):** {kbb_l}")
+                #             st.write(f"**True Dominance (FIP):** {fip_l}")
+                #             st.write(f"**Command (K-BB%):** {kbb_l}")
 
-                            st.markdown("**💡 Coaching Insight:**")
-                            if p_row['era'] > p_row['fip'] + 3.0:
-                                st.success("Luck Factor: You are pitching better than your ERA suggests. Don't change your routine!")
-                            elif p_row['k_minus_bb_pct'] > df_pitching['k_minus_bb_pct'].mean():
-                                st.success("Strikeout Artist: High ability to finish hitters. Use your put-away pitch early.")
+                #             st.markdown("**💡 Coaching Insight:**")
+                #             if p_row['era'] > p_row['fip'] + 3.0:
+                #                 st.success("Luck Factor: You are pitching better than your ERA suggests. Don't change your routine!")
+                #             elif p_row['k_minus_bb_pct'] > df_pitching['k_minus_bb_pct'].mean():
+                #                 st.success("Strikeout Artist: High ability to finish hitters. Use your put-away pitch early.")
 
-                    with p_col2:
-                        # --- D. 雷達圖可視化 (Radar Chart) ---
-                        if not b_data.empty:
-                            st.markdown("### 📊 Skill Attribute Map")
-                            # 準備雷達圖數據 (標準化為 0-100)
-                            categories = ['AVG', 'OBP', 'SLG', 'K% (Inv)', 'BB%']
+                #     with p_col2:
+                #         # --- D. 雷達圖可視化 (Radar Chart) ---
+                #         if not b_data.empty:
+                #             st.markdown("### 📊 Skill Attribute Map")
+                #             # 準備雷達圖數據 (標準化為 0-100)
+                #             categories = ['AVG', 'OBP', 'SLG', 'K% (Inv)', 'BB%']
                             
-                            # 計算百分位數作為雷達圖的分數
-                            def get_p_val(val, series, inv=False):
-                                return (series < val).mean() * 100 if not inv else (series > val).mean() * 100
+                #             # 計算百分位數作為雷達圖的分數
+                #             def get_p_val(val, series, inv=False):
+                #                 return (series < val).mean() * 100 if not inv else (series > val).mean() * 100
 
-                            stats_val = [
-                                get_p_val(row['avg'], df_batting['avg']),
-                                get_p_val(row['obp'], df_batting['obp']),
-                                get_p_val(row['slg'], df_batting['slg']),
-                                get_p_val(row['k_pct'], df_batting['k_pct'], True),
-                                get_p_val(row['bb_pct'], df_batting['bb_pct'])
-                            ]
+                #             stats_val = [
+                #                 get_p_val(row['avg'], df_batting['avg']),
+                #                 get_p_val(row['obp'], df_batting['obp']),
+                #                 get_p_val(row['slg'], df_batting['slg']),
+                #                 get_p_val(row['k_pct'], df_batting['k_pct'], True),
+                #                 get_p_val(row['bb_pct'], df_batting['bb_pct'])
+                #             ]
                             
-                            # 繪製簡單的雷達圖
-                            fig_radar, ax_radar = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-                            angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
-                            stats_val += stats_val[:1] # 閉合圖形
-                            angles += angles[:1]
+                #             # 繪製簡單的雷達圖
+                #             fig_radar, ax_radar = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+                #             angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+                #             stats_val += stats_val[:1] # 閉合圖形
+                #             angles += angles[:1]
                             
-                            ax_radar.fill(angles, stats_val, color='red', alpha=0.25)
-                            ax_radar.plot(angles, stats_val, color='red', linewidth=2)
-                            ax_radar.set_yticklabels([]) # 隱藏圓圈標籤
-                            ax_radar.set_xticks(angles[:-1])
-                            ax_radar.set_xticklabels(categories)
-                            st.pyplot(fig_radar)
-            with tab8:
-                st.header("⚾ Tactical Defensive Playbook")
-                st.write("Select the game situation to view the optimal defensive rotation and backup assignments.")
+                #             ax_radar.fill(angles, stats_val, color='red', alpha=0.25)
+                #             ax_radar.plot(angles, stats_val, color='red', linewidth=2)
+                #             ax_radar.set_yticklabels([]) # 隱藏圓圈標籤
+                #             ax_radar.set_xticks(angles[:-1])
+                #             ax_radar.set_xticklabels(categories)
+                #             st.pyplot(fig_radar)
+            # with tab7:
+            #     st.header("⚾ Tactical Defensive Playbook")
+            #     st.write("Select the game situation to view the optimal defensive rotation and backup assignments.")
 
-                # 4.1 Create Layout for UI Controls
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    selected_outs = st.selectbox("Outs", [0, 1, 2], key="pb_outs")
-                with col2:
-                    selected_runners = st.selectbox("Runners On", ["Empty", "1B", "2B", "3B", "1B & 2B", "1B & 3B", "2B & 3B", "Loaded"], key="pb_runners")
-                with col3:
-                    selected_hit_type = st.selectbox("Hit Type", ["Ground Ball", "Fly Ball", "Bunt"], key="pb_hit")
-                with col4:
-                    selected_location = st.selectbox("Location", ["Infield (SS/2B)", "Infield (1B/3B)", "Left Field", "Center Field", "Right Field"], key="pb_loc")
+            #     # 4.1 Create Layout for UI Controls
+            #     col1, col2, col3, col4 = st.columns(4)
+            #     with col1:
+            #         selected_outs = st.selectbox("Outs", [0, 1, 2], key="pb_outs")
+            #     with col2:
+            #         selected_runners = st.selectbox("Runners On", ["Empty", "1B", "2B", "3B", "1B & 2B", "1B & 3B", "2B & 3B", "Loaded"], key="pb_runners")
+            #     with col3:
+            #         selected_hit_type = st.selectbox("Hit Type", ["Ground Ball", "Fly Ball", "Bunt"], key="pb_hit")
+            #     with col4:
+            #         selected_location = st.selectbox("Location", ["Infield (SS/2B)", "Infield (1B/3B)", "Left Field", "Center Field", "Right Field"], key="pb_loc")
 
-                # 4.2 Execute Logic based on selections
-                # Get the correct ID from the router
-                current_playbook_id = determine_playbook_id(
-                    outs=selected_outs, 
-                    runners=selected_runners, 
-                    hit_type=selected_hit_type, 
-                    location=selected_location
-                )
+            #     # 4.2 Execute Logic based on selections
+            #     # Get the correct ID from the router
+            #     current_playbook_id = determine_playbook_id(
+            #         outs=selected_outs, 
+            #         runners=selected_runners, 
+            #         hit_type=selected_hit_type, 
+            #         location=selected_location
+            #     )
                 
-                # Fetch the specific data for that ID
-                current_playbook_data = get_playbook_data().get(current_playbook_id)
+            #     # Fetch the specific data for that ID
+            #     current_playbook_data = get_playbook_data().get(current_playbook_id)
 
-                # 4.3 Draw the visualization
-                st.markdown("---")
-                draw_complete_playbook(current_playbook_data)
+            #     # 4.3 Draw the visualization
+            #     st.markdown("---")
+            #     draw_complete_playbook(current_playbook_data)
 
-                # 4.4 Add a Legend
-                st.markdown("""
-                **Legend:**
-                * 🏃‍♂️ **Gray Dashed Line:** Player movement/backup path.
-                * ⚾ **Solid Red Arrow:** Ball throw path.
-                * Player labels show their **final destination** after the play develops.
-                """)
+            #     # 4.4 Add a Legend
+            #     st.markdown("""
+            #     **Legend:**
+            #     * 🏃‍♂️ **Gray Dashed Line:** Player movement/backup path.
+            #     * ⚾ **Solid Red Arrow:** Ball throw path.
+            #     * Player labels show their **final destination** after the play develops.
+            #     """)
