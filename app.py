@@ -29,6 +29,124 @@ TEAM_IDS = {
 }
 
 # ==========================================
+# Playbook Data and Logic Router
+# ==========================================
+
+def get_playbook_data():
+    return {
+        "STD_GROUND_SS": {
+            "title": "Standard 6-3 Groundout",
+            "movements": {
+                "P": (1.2, 0.8), "C": (0, 0.2), "1B": (1.0, 1.0), "2B": (0.2, 2.0),
+                "SS": (-0.5, 1.7), "3B": (-1.0, 1.2), "LF": (-1.0, 2.4), "CF": (-0.2, 2.6), "RF": (1.5, 1.8)
+            },
+            "throws": [(-0.5, 1.7, 1.0, 1.1)]
+        },
+        "DP_6_4_3": {
+            "title": "6-4-3 Double Play",
+            "movements": {
+                "P": (1.2, 0.8), "C": (0, 0.2), "1B": (1.0, 1.0), "2B": (0.1, 2.1),
+                "SS": (-0.5, 1.7), "3B": (-1.0, 1.2), "LF": (-0.8, 2.3), "CF": (0.2, 2.8), "RF": (1.4, 1.8)
+            },
+            "throws": [(-0.5, 1.7, 0.1, 2.1), (0.1, 2.1, 1.0, 1.1)]
+        },
+        "SINGLE_RF_RUNNER_1B": {
+            "title": "Single to RF (Runner on 1B goes to 3B)",
+            "movements": {
+                "P": (-1.5, 1.0), "C": (0, 0.2), "1B": (1.0, 1.0), "2B": (0.8, 1.5),
+                "SS": (0, 2.2), "3B": (-1.0, 1.0), "LF": (-1.0, 2.0), "CF": (0.8, 3.0), "RF": (1.8, 2.8)
+            },
+            "throws": [(1.8, 2.8, 0.8, 1.5), (0.8, 1.5, -1.0, 1.0)]
+        },
+        "SAC_FLY_CF": {
+            "title": "Sacrifice Fly to CF (Play at the Plate)",
+            "movements": {
+                "P": (0, -0.8), "C": (0, 0), "1B": (1.1, 1.1), "2B": (0.2, 2.2),
+                "SS": (0, 1.4), "3B": (-1.1, 1.1), "LF": (-0.8, 2.5), "CF": (0, 3.2), "RF": (0.8, 2.5)
+            },
+            "throws": [(0, 3.2, 0, 1.4), (0, 1.4, 0, 0)]
+        },
+        "DOUBLE_LC_GAP": {
+            "title": "Double to Left-Center (Double Relay System)",
+            "movements": {
+                "P": (-0.5, 0.5), "C": (0, 0), "1B": (0.5, 0.8), "2B": (-0.2, 1.8),
+                "SS": (-0.6, 2.2), "3B": (-1.0, 1.0), "LF": (-1.2, 3.0), "CF": (-0.8, 3.2), "RF": (1.0, 2.0)
+            },
+            "throws": [(-0.8, 3.2, -0.6, 2.2), (-0.6, 2.2, -1.0, 1.0)]
+        },
+        "BUNT_DEFENSE_1B": {
+            "title": "Sacrifice Bunt Defense (Play to 1B or 2B)",
+            "movements": {
+                "P": (0, 0.5), "C": (0, 0.2), "1B": (0.5, 0.5), "2B": (1.0, 1.1),
+                "SS": (0, 2.1), "3B": (-0.5, 0.5), "LF": (-1.0, 1.5), "CF": (0, 1.8), "RF": (1.5, 1.5)
+            },
+            "throws": [(0.5, 0.5, 1.0, 1.1)]
+        }
+    }
+
+# ==========================================
+# 2. Logic Router
+# ==========================================
+def determine_playbook_id(outs, runners, hit_type, location):
+    if hit_type == "Bunt" and runners in ["1B", "1B & 2B"] and outs < 2:
+        return "BUNT_DEFENSE_1B"
+    if hit_type == "Ground Ball":
+        if runners in ["1B", "1B & 2B", "1B & 3B", "Loaded"] and outs < 2:
+            return "DP_6_4_3"
+        else:
+            return "STD_GROUND_SS"
+    if hit_type == "Fly Ball":
+        if outs < 2 and runners in ["3B", "1B & 3B", "2B & 3B", "Loaded"]:
+            return "SAC_FLY_CF"
+        elif location in ["Left Field", "Center Field"]:
+            return "DOUBLE_LC_GAP"
+        elif location == "Right Field":
+            return "SINGLE_RF_RUNNER_1B"
+    return "STD_GROUND_SS"
+
+# ==========================================
+# 3. Drawing Function
+# ==========================================
+def draw_complete_playbook(playbook_data):
+    if not playbook_data:
+        st.warning("⚠️ Scenario under development.")
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    
+    # Draw Baseball Diamond
+    diamond = plt.Polygon([[0, 0.1], [0.9, 1], [0, 1.9], [-0.9, 1]], fill=False, color="green", lw=2)
+    ax.add_patch(diamond)
+
+    # Base coordinates (Starting Positions)
+    pos_start = {
+        "P": (0, 0.8), "C": (0, 0), "1B": (1.1, 1.1), "2B": (0.5, 1.8),
+        "SS": (-0.5, 1.8), "3B": (-1.1, 1.1), "LF": (-1.5, 2.5), "CF": (0, 3.2), "RF": (1.5, 2.5)
+    }
+
+    # Draw Movement Arrows (Dashed)
+    for player, end_pos in playbook_data["movements"].items():
+        start_pos = pos_start[player]
+        ax.annotate("", xy=end_pos, xytext=start_pos,
+                    arrowprops=dict(arrowstyle="->", color="gray", ls="--", alpha=0.6))
+        # Draw player label at destination
+        ax.text(end_pos[0], end_pos[1], player, fontsize=10, ha='center', bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+
+    # Draw Throwing Arrows (Solid Red)
+    for t_start_x, t_start_y, t_end_x, t_end_y in playbook_data["throws"]:
+        ax.annotate("", xy=(t_end_x, t_end_y), xytext=(t_start_x, t_start_y),
+                    arrowprops=dict(arrowstyle="fancy", color="red", lw=2))
+
+    ax.set_title(playbook_data["title"], fontsize=16, fontweight='bold', pad=20)
+    ax.set_xlim(-2.5, 2.5)
+    ax.set_ylim(-1.0, 4) # Adjusted to fit deep backups
+    ax.axis('off')
+    
+    # Render the plot in Streamlit
+    st.pyplot(fig)
+
+
+# ==========================================
 # 2. Data Fetching and Preprocessing
 # ==========================================
 @st.cache_data(ttl=3600)
@@ -240,14 +358,15 @@ if not df_batting.empty:
         # Correct way to write (add the 3rd title)
         # Replace with writing containing 5 tabs
         # 加入第 6 個標題 "📖 數據字典"
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "📋 Batting Basic", 
         "🔬 Batting Adv", 
         "🥎 Pitching Basic", 
         "🤖 Pitching ML", 
         "⚔️ BP Sim", 
         "📖 Glossary",
-        "👤 Player Profile"
+        "👤 Player Profile",
+        "📊 Defensive Positions"
     ])
         
         # --- Tab 1: Basic Stats (Rate Stats moved to front) ---
@@ -832,3 +951,41 @@ if not df_batting.empty:
                             ax_radar.set_xticks(angles[:-1])
                             ax_radar.set_xticklabels(categories)
                             st.pyplot(fig_radar)
+            with tab8:
+                st.header("⚾ Tactical Defensive Playbook")
+                st.write("Select the game situation to view the optimal defensive rotation and backup assignments.")
+
+                # 4.1 Create Layout for UI Controls
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    selected_outs = st.selectbox("Outs", [0, 1, 2], key="pb_outs")
+                with col2:
+                    selected_runners = st.selectbox("Runners On", ["Empty", "1B", "2B", "3B", "1B & 2B", "1B & 3B", "2B & 3B", "Loaded"], key="pb_runners")
+                with col3:
+                    selected_hit_type = st.selectbox("Hit Type", ["Ground Ball", "Fly Ball", "Bunt"], key="pb_hit")
+                with col4:
+                    selected_location = st.selectbox("Location", ["Infield (SS/2B)", "Infield (1B/3B)", "Left Field", "Center Field", "Right Field"], key="pb_loc")
+
+                # 4.2 Execute Logic based on selections
+                # Get the correct ID from the router
+                current_playbook_id = determine_playbook_id(
+                    outs=selected_outs, 
+                    runners=selected_runners, 
+                    hit_type=selected_hit_type, 
+                    location=selected_location
+                )
+                
+                # Fetch the specific data for that ID
+                current_playbook_data = get_playbook_data().get(current_playbook_id)
+
+                # 4.3 Draw the visualization
+                st.markdown("---")
+                draw_complete_playbook(current_playbook_data)
+
+                # 4.4 Add a Legend
+                st.markdown("""
+                **Legend:**
+                * 🏃‍♂️ **Gray Dashed Line:** Player movement/backup path.
+                * ⚾ **Solid Red Arrow:** Ball throw path.
+                * Player labels show their **final destination** after the play develops.
+                """)
