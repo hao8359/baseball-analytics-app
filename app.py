@@ -185,6 +185,10 @@ def load_data(season):
             return pd.DataFrame()
             
         json_data = response.json()
+        if 'data' not in json_data:
+            st.error(f"⚠️ API Error ({season} Batting): The 'data' key is missing from the server response.")
+            st.info(f"Server Response: {json_data}") # This will show you exactly what the API is complaining about
+            return pd.DataFrame()
         df = pd.json_normalize(json_data['data'], sep='_')
         
         # 26 Basic Numerical Features
@@ -227,6 +231,10 @@ def load_pitching_data(season):
     try:
         response = requests.get(url, headers=headers, timeout=15)
         json_data = response.json()
+        if 'data' not in json_data:
+            st.error(f"⚠️ API Error ({season} Pitching): The 'data' key is missing from the server response.")
+            st.info(f"Server Response: {json_data}") 
+            return pd.DataFrame()
         df = pd.json_normalize(json_data['data'], sep='_')
         
         # Define columns that need to be converted to numeric
@@ -354,7 +362,7 @@ if not df_batting.empty:
     with col1:
         selected_team = st.selectbox("Select Team to Analyze:", list(team_ids.keys()))
     with col2:
-        min_ab = st.slider("Minimum At Bats (AB) Filter:", 1, 50, 10)
+        min_ab = st.slider("Minimum At Bats (AB) Filter:", 1, 50, 1)
     
     # 4. Filter by Team and AB (df_team now inherits the calculated columns)
     target_id = team_ids[selected_team]
