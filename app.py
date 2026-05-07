@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 st.set_page_config(page_title="Regionserien Analytics Dashboard", layout="wide", page_icon="⚾")
 
 # Team ID Mapping Table
-TEAM_IDS = {
+TEAM_IDS_2025 = {
     
     "Stockholm B": "36163",
     "Stockholm J": "36168",
@@ -28,6 +28,21 @@ TEAM_IDS = {
     "Sundbyberg junior": "36169"
 }
 
+TEAM_IDS_2026 = {
+
+    "Stockholm B": "42585",
+    "Stockholm J": "42586",
+    "Alby Stars": "42587",
+    "Enköping": "42588",
+    "Enskede": "42582",
+    "Sundbyberg": "42583",
+    "Sundbyberg junior": "42584"
+}
+
+def get_team_ids_by_season(season):
+    if season == "2026":
+        return TEAM_IDS_2026
+    return TEAM_IDS_2025
 # ==========================================
 # Playbook Data and Logic Router
 # ==========================================
@@ -150,9 +165,12 @@ def draw_complete_playbook(playbook_data):
 # 2. Data Fetching and Preprocessing
 # ==========================================
 @st.cache_data(ttl=3600)
-def load_data():
+def load_data(season):
     # Official WBSC Stats API URL
-    url = "https://stats.baseboll-softboll.se/api/v1/stats/events/2025-regionserien-baseboll/index?section=players&stats-section=batting&team=&round=&split=&split=&language=en"
+    if season == "2026":
+        url = "https://stats.baseboll-softboll.se/api/v1/stats/events/2026-regionserien-baseboll/index?section=players&stats-section=batting&team=&round=6642&split=&split=&language=en"
+    else:
+        url = "https://stats.baseboll-softboll.se/api/v1/stats/events/2025-regionserien-baseboll/index?section=players&stats-section=batting&team=&round=&split=&split=&language=en"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
@@ -163,7 +181,7 @@ def load_data():
         response = requests.get(url, headers=headers, timeout=15)
         # Check if response is valid JSON
         if "application/json" not in response.headers.get("Content-Type", ""):
-            st.error("Server returned non-JSON format. Please try again later.")
+            st.error(f"[{season}]Server returned non-JSON format. Please try again later.")
             return pd.DataFrame()
             
         json_data = response.json()
@@ -189,15 +207,18 @@ def load_data():
         
         return df
     except Exception as e:
-        st.error(f"Connection Error: {e}")
+        st.error(f"Connection Error ({season}): {e}")
         return pd.DataFrame()
 # ==========================================
 # New: Pitching data loading and calculation
 # ==========================================
 @st.cache_data(ttl=3600)
-def load_pitching_data():
+def load_pitching_data(season):
     # Remove the team parameter from the URL to fetch pitching data for all teams at once
-    url = "https://stats.baseboll-softboll.se/api/v1/stats/events/2025-regionserien-baseboll/index?section=players&stats-section=pitching&team=&round=&split=&split=&language=en"
+    if season == "2026":
+        url = "https://stats.baseboll-softboll.se/api/v1/stats/events/2026-regionserien-baseboll/index?section=players&stats-section=pitching&team=&round=6642&split=&split=&language=en"
+    else:
+        url = "https://stats.baseboll-softboll.se/api/v1/stats/events/2025-regionserien-baseboll/index?section=players&stats-section=pitching&team=&round=&split=&split=&language=en"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
         'Accept': 'application/json'
@@ -297,15 +318,22 @@ def rename_pitching_cols(df):
 # ==========================================
 # 4. Main Logic and Metric Calculations
 # ==========================================
-st.title("⚾ 2025 Baseball Analytics System")
+# 1. Sidebar Control Panel
+with st.sidebar:
+    st.header("⚙️ Global Settings")
+    selected_season = st.selectbox("Select Season:", ["2025", "2026"], index=0)
+    team_ids = get_team_ids_by_season(selected_season)
+    #selected_team = st.selectbox("Select Team:", list(team_ids.keys()))
+    #min_ab = st.slider("Min At Bats (AB):", 1, 50, 10)
 
-# 1. Define safe_divide globally once
+st.title(f"⚾ {selected_season} Baseball Analytics System")
+
 def safe_divide(numerator, denominator):
     return np.where(denominator == 0, 0, numerator / denominator)
 
-# 2. Load both datasets
-df_batting = load_data()          
-df_pitching = load_pitching_data() 
+# 2. Load Data based on selected season
+df_batting = load_data(selected_season)          
+df_pitching = load_pitching_data(selected_season)
 
 if not df_batting.empty:
     # --- CALCULATE LEAGUE-WIDE BATTING METRICS FIRST ---
@@ -324,16 +352,16 @@ if not df_batting.empty:
     # 3. Top Control Panel
     col1, col2 = st.columns([1, 2])
     with col1:
-        selected_team = st.selectbox("Select Team to Analyze:", list(TEAM_IDS.keys()))
+        selected_team = st.selectbox("Select Team to Analyze:", list(team_ids.keys()))
     with col2:
         min_ab = st.slider("Minimum At Bats (AB) Filter:", 1, 50, 10)
     
     # 4. Filter by Team and AB (df_team now inherits the calculated columns)
-    target_id = TEAM_IDS[selected_team]
+    target_id = team_ids[selected_team]
     df_team = df_batting[(df_batting['teamid'].astype(str) == target_id) & (df_batting['ab'] >= min_ab)].copy()
     
     if df_team.empty:
-        st.warning(f"No players found with AB >= {min_ab}.")
+        st.warning(f"No players found for {selected_team} in {selected_season} with AB >= {min_ab}.")
     else:
         # Safe Division Helper
         def safe_divide(numerator, denominator):
@@ -369,7 +397,7 @@ if not df_batting.empty:
         
         # --- Tab 1: Basic Stats (Rate Stats moved to front) ---
         with tab1:
-            st.subheader(f"📋 Raw Performance Data: {selected_team}")
+            st.subheader(f"📋 Raw Performance: {selected_team} ({selected_season})")
             # Rearranged columns as requested
             basic_columns = [
                 'name_clean', 'ab', 'g', 'gs', 'r', 'h', 'double', 'triple', 'hr', 'rbi', 
@@ -390,8 +418,7 @@ if not df_batting.empty:
 
         # --- Tab 2: Advanced Analytics ---
         with tab2:
-            st.subheader("🔬 Advanced Sabermetrics")
-            
+            st.subheader(f"🔬 Advanced Analytics: {selected_team}")
             adv_cols = ['name_clean', 'pa', 'babip', 'iso_val', 'k_pct', 'bb_pct', 'rc', 'gpa_val']
             st.dataframe(
                 df_team.sort_values('rc', ascending=False)[adv_cols].style.format({
@@ -434,12 +461,12 @@ if not df_batting.empty:
                 ax_disc.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
                 st.pyplot(fig_disc)
         with tab3:
-            st.subheader(f"🥎 Pitching Dashboard: {selected_team}")
+            st.subheader(f"🥎 Pitching: {selected_team} ({selected_season})")
                 
-            df_pitching_all = load_pitching_data()
+            df_pitching_all = load_pitching_data(selected_season)
             
             if not df_pitching_all.empty:
-                target_id = TEAM_IDS[selected_team]
+                target_id = team_ids[selected_team]
                 df_team_pitchers = df_pitching_all[df_pitching_all['teamid'].astype(str) == target_id].copy()
                 
                 if df_team_pitchers.empty:
@@ -502,109 +529,98 @@ if not df_batting.empty:
                         use_container_width=True,
                         hide_index=True
                     )
-            with tab4:
-                # 1. Get league-wide pitching data (filter out samples with innings pitched less than 5)
-                df_pitchers_all = load_pitching_data()
-                df_pitchers_all = df_pitchers_all[df_pitchers_all['ip_calc'] >= 5].copy() 
+            # --- Tab 4: Pitching ML ---
+        # --- Tab 4: Pitching ML ---
+        with tab4:
+            st.subheader(f"🤖 ML Style Analysis - {selected_season}")
+            
+            # Filter pitchers with 5 or more innings pitched (IP)
+            df_ml = df_pitching[df_pitching['ip_calc'] >= 5].copy() 
 
-                if not df_pitchers_all.empty:
-                    st.subheader(f"🤖 Machine Learning Analysis (Pitching Side) - {selected_team}")
-                    
-                   # ==========================================
-                    # Enhanced Machine Learning Model (4 Clusters)
-                    # ==========================================
-                    # 1. Add gb_fb_ratio to the training features
-                    features = ['k_pct', 'bb_pct', 'opp_babip', 'fip', 'gb_fb_ratio']
-                    X = df_pitchers_all[features].fillna(0)
-                    scaler = StandardScaler()
-                    X_scaled = scaler.fit_transform(X)
-                    
-                    # 2. Execute K-Means clustering (Now upgraded to 4 clusters)
-                    kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
-                    df_pitchers_all['cluster'] = kmeans.fit_predict(X_scaled)
-                    
-                    # 3. Dynamic Labeling: Safely label clusters based on their mathematical centroids
-                    cluster_centers = pd.DataFrame(scaler.inverse_transform(kmeans.cluster_centers_), columns=features)
-                    style_map = {}
-                    
-                    for i, row in cluster_centers.iterrows():
-                        if row['bb_pct'] == cluster_centers['bb_pct'].max() and row['fip'] > 4.0:
-                            style_map[i] = "Wild/Struggling"
-                        elif row['gb_fb_ratio'] == cluster_centers['gb_fb_ratio'].max():
-                            style_map[i] = "Groundball Specialist"
-                        elif row['k_pct'] == cluster_centers['k_pct'].max():
-                            style_map[i] = "Power/Strikeout"
-                        else:
-                            style_map[i] = "Finesse/Control"
-                            
-                    df_pitchers_all['style'] = df_pitchers_all['cluster'].map(style_map)
-                    
-                    # Calculate luck index (ERA minus FIP)
-                    df_pitchers_all['era_minus_fip'] = df_pitchers_all['era'] - df_pitchers_all['fip']
-                    
-                    # Filter for the selected team
-                    target_id = TEAM_IDS[selected_team]
-                    df_team_pitchers = df_pitchers_all[df_pitchers_all['teamid'].astype(str) == target_id].copy()
-
-                    if df_team_pitchers.empty:
-                        st.warning(f"Currently {selected_team} has no pitcher data that meets the conditions (innings pitched >= 5).")
+            if df_ml.empty:
+                st.warning(f"Currently, no pitchers in the {selected_season} season have met the 5-inning threshold.")
+            elif len(df_ml) < 4:
+                # If sample size is less than 4, skip clustering and display a friendly notice
+                st.warning(f"⚠️ Insufficient data for machine learning clustering. Currently, only {len(df_ml)} pitchers in the entire league have met the innings pitched threshold (>= 5 IP) for the {selected_season} season. Please wait for more data to accumulate as the season progresses!")
+            else:
+                # Sample size >= 4, safely execute K-Means logic
+                features = ['k_pct', 'bb_pct', 'opp_babip', 'fip', 'gb_fb_ratio']
+                X = df_ml[features].fillna(0)
+                scaler = StandardScaler()
+                X_scaled = scaler.fit_transform(X)
+                
+                kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+                df_ml['cluster'] = kmeans.fit_predict(X_scaled)
+                
+                # Dynamic Labeling based on cluster centroids
+                cluster_centers = pd.DataFrame(scaler.inverse_transform(kmeans.cluster_centers_), columns=features)
+                style_map = {}
+                
+                for i, row in cluster_centers.iterrows():
+                    if row['bb_pct'] == cluster_centers['bb_pct'].max() and row['fip'] > 4.0:
+                        style_map[i] = "Wild/Struggling"
+                    elif row['gb_fb_ratio'] == cluster_centers['gb_fb_ratio'].max():
+                        style_map[i] = "Groundball Specialist"
+                    elif row['k_pct'] == cluster_centers['k_pct'].max():
+                        style_map[i] = "Power/Strikeout"
                     else:
-                        st.markdown("### 1. Enhanced Pitcher Style Clustering")
+                        style_map[i] = "Finesse/Control"
                         
-                        fig_cluster, ax_cluster = plt.subplots(figsize=(8, 5))
-                        
-                        # Plot: GB/FB Ratio (X-axis) vs K% (Y-axis)
-                        sns.scatterplot(data=df_team_pitchers, x='gb_fb_ratio', y='k_pct', hue='style', s=150, ax=ax_cluster)
-                        
-                        # Add player name labels
-                        for _, row in df_team_pitchers.iterrows():
-                            ax_cluster.text(row['gb_fb_ratio'] + 0.05, row['k_pct'] + 0.002, row['name_clean'], fontsize=9)
+                df_ml['style'] = df_ml['cluster'].map(style_map)
+                df_ml['era_minus_fip'] = df_ml['era'] - df_ml['fip']
+                
+                # Filter data for the currently selected team
+                df_team_ml = df_ml[df_ml['teamid'].astype(str) == target_id].copy()
 
-                        # Update Chart formatting
-                        ax_cluster.set_title(f"Pitcher Styles ({selected_team}): GB/FB Ratio vs Strikeout Rate")
-                        ax_cluster.set_xlabel("Groundball/Flyball Ratio (GB/FB)")
-                        ax_cluster.set_ylabel("Strikeout Rate (K%)")
+                if df_team_ml.empty:
+                    st.info(f"League-wide data is sufficient, but {selected_team} currently has no pitchers who have met the 5-inning threshold.")
+                else:
+                    st.markdown("### 1. Enhanced Pitcher Style Clustering")
+                    
+                    fig_cluster, ax_cluster = plt.subplots(figsize=(8, 5))
+                    sns.scatterplot(data=df_team_ml, x='gb_fb_ratio', y='k_pct', hue='style', s=150, ax=ax_cluster)
+                    
+                    for _, row in df_team_ml.iterrows():
+                        ax_cluster.text(row['gb_fb_ratio'] + 0.05, row['k_pct'] + 0.002, row['name_clean'], fontsize=9)
+
+                    ax_cluster.set_title(f"Pitcher Styles ({selected_team}): GB/FB Ratio vs Strikeout Rate")
+                    ax_cluster.set_xlabel("Groundball/Flyball Ratio (GB/FB)")
+                    ax_cluster.set_ylabel("Strikeout Rate (K%)")
+                    ax_cluster.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.0%}'))
+                    ax_cluster.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+                    
+                    st.pyplot(fig_cluster)
+                    
+                    st.divider()
+                    
+                    st.markdown("### 2. ERA Regression Risk Detection (ERA vs FIP)")
+                    
+                    df_team_ml = df_team_ml.sort_values('era_minus_fip', ascending=False)
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.error("🚨 Lucky / Potential Regression Zone (ERA lower than FIP)")
+                        lucky_pitchers = df_team_ml[df_team_ml['era_minus_fip'] < 0]
+                        st.dataframe(lucky_pitchers[['name_clean', 'era', 'fip', 'era_minus_fip']].style.format({
+                            'era': '{:.2f}', 'fip': '{:.2f}', 'era_minus_fip': '{:.2f}'
+                        }), hide_index=True)
                         
-                        # Format Y-axis as percentage (X-axis stays as standard float ratio)
-                        ax_cluster.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.0%}'))
-                        
-                        # Move legend outside the plot so it doesn't cover data points
-                        ax_cluster.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
-                        st.pyplot(fig_cluster)
-                        
-                        st.divider()
-                        
-                        st.markdown("### 2. ERA Unexploded Bomb Detection (ERA vs FIP)")
-                        st.info("Compare the pitcher's actual ERA with advanced independent ERA (FIP). If ERA is much lower than FIP, it means luck is a big factor, with risk of exploding in the future; otherwise, strength is underestimated.")
-                        
-                        df_team_pitchers = df_team_pitchers.sort_values('era_minus_fip', ascending=False)
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.error("🚨 Extremely lucky / unexploded bomb zone (ERA lower than FIP)")
-                            # Filter pitchers with ERA less than FIP (negative values)
-                            lucky_pitchers = df_team_pitchers[df_team_pitchers['era_minus_fip'] < 0]
-                            st.dataframe(lucky_pitchers[['name_clean', 'era', 'fip', 'era_minus_fip']].style.format({
-                                'era': '{:.2f}', 'fip': '{:.2f}', 'era_minus_fip': '{:.2f}'
-                            }), hide_index=True)
-                            
-                        with col2:
-                            st.success("💎 Extremely unlucky / strength underestimated (ERA higher than FIP)")
-                            # Filter pitchers with ERA greater than FIP (positive values)
-                            unlucky_pitchers = df_team_pitchers[df_team_pitchers['era_minus_fip'] >= 0]
-                            st.dataframe(unlucky_pitchers[['name_clean', 'era', 'fip', 'era_minus_fip']].style.format({
-                                'era': '{:.2f}', 'fip': '{:.2f}', 'era_minus_fip': '{:.2f}'
-                            }), hide_index=True)
+                    with col2:
+                        st.success("💎 Unlucky / Undervalued Talent (ERA higher than FIP)")
+                        unlucky_pitchers = df_team_ml[df_team_ml['era_minus_fip'] >= 0]
+                        st.dataframe(unlucky_pitchers[['name_clean', 'era', 'fip', 'era_minus_fip']].style.format({
+                            'era': '{:.2f}', 'fip': '{:.2f}', 'era_minus_fip': '{:.2f}'
+                        }), hide_index=True)
 
 
 
 
                
             with tab5:
-                st.subheader("⚔️ Pitcher vs Batter: Matchup Expected Value Simulation")
+                st.subheader(f"⚔️ {selected_season} Matchup Sim")
                 st.info("Combine the batter's extra-base hit ability (ISO) with the pitcher's advanced independent data (FIP, K%), predict the probability of specific outcomes in the at-bat.")
-                df_batters_all = load_data()
-                df_pitchers_all = load_pitching_data()
+                df_batters_all = load_data(selected_season)
+                df_pitchers_all = load_pitching_data(selected_season)
 
                 if not df_batters_all.empty and not df_pitchers_all.empty:
                     df_batters_all['pa'] = df_batters_all['ab'] + df_batters_all['bb'] + df_batters_all['hbp'] + df_batters_all['sf'] + df_batters_all['sh']
@@ -618,8 +634,8 @@ if not df_batting.empty:
                     
                     with col_sel1:
                         st.markdown("### 🦇 Select Batter (Offense)")
-                        b_team = st.selectbox("Batter's team", list(TEAM_IDS.keys()), key="bat_team")
-                        b_players = df_batters_filtered[df_batters_filtered['teamid'].astype(str) == TEAM_IDS[b_team]]
+                        b_team = st.selectbox("Batter's team", list(team_ids.keys()), key="bat_team")
+                        b_players = df_batters_filtered[df_batters_filtered['teamid'].astype(str) == team_ids[b_team]]
                         
                         if b_players.empty:
                             st.warning("The team currently has no qualified batters.")
@@ -630,8 +646,8 @@ if not df_batting.empty:
 
                     with col_sel2:
                         st.markdown("### ⚾ Select Pitcher (Defense)")
-                        p_team = st.selectbox("Pitcher's team", list(TEAM_IDS.keys()), key="pit_team")
-                        p_players = df_pitchers_filtered[df_pitchers_filtered['teamid'].astype(str) == TEAM_IDS[p_team]]
+                        p_team = st.selectbox("Pitcher's team", list(team_ids.keys()), key="pit_team")
+                        p_players = df_pitchers_filtered[df_pitchers_filtered['teamid'].astype(str) == team_ids[p_team]]
                         
                         if p_players.empty:
                             st.warning("The team currently has no qualified pitchers.")
